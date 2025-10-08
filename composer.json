@@ -1,0 +1,64 @@
+{
+    "name": "jasonmccreary/laravel-cfcache",
+    "type": "library",
+    "description": "WIP",
+    "keywords": [
+        "laravel"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^8.2"
+    },
+    "require-dev": {
+        "laravel/pint": "~1.20.0",
+        "mockery/mockery": "^1.4.4",
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^12.0"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "JMac\\Cloudflare\\PageCacheServiceProvider"
+            ]
+        }
+    },
+    "autoload": {
+        "files": [
+            "src/helpers.php"
+        ],
+        "psr-4": {
+            "JMac\\Cloudflare\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "post-autoload-dump": [
+            "@clear",
+            "@prepare"
+        ],
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@build",
+            "@php vendor/bin/testbench serve --ansi"
+        ],
+        "lint": [
+            "@php vendor/bin/pint --ansi"
+        ],
+        "test": [
+            "@clear",
+            "@php vendor/bin/phpunit"
+        ]
+    }
+}
