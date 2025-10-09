@@ -4,6 +4,7 @@ namespace JMac\Cloudflare;
 
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
+use JMac\Cloudflare\Commands\GenerateWafRule;
 
 class PageCacheServiceProvider extends ServiceProvider implements DeferrableProvider
 {
@@ -12,7 +13,11 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
      */
     public function boot(): void
     {
-        //
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                GenerateWafRule::class,
+            ]);
+        }
     }
 
     /**
