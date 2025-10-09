@@ -12,7 +12,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          tools: phplint, laravel/pint:1.20.x
+          tools: phplint, laravel/pint:1.25.x
       - name: Check syntax
         run: phplint .
       - name: Check code style

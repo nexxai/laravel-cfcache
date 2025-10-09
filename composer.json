@@ -10,7 +10,7 @@
         "php": "^8.2"
     },
     "require-dev": {
-        "laravel/pint": "~1.20.0",
+        "laravel/pint": "~1.25.0",
         "mockery/mockery": "^1.4.4",
         "orchestra/testbench": "^10.0",
         "phpunit/phpunit": "^12.0"
@@ -26,9 +26,6 @@
         }
     },
     "autoload": {
-        "files": [
-            "src/helpers.php"
-        ],
         "psr-4": {
             "JMac\\Cloudflare\\": "src/"
         }
