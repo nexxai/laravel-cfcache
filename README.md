@@ -1,7 +1,7 @@
 <p align="right">
-    <a href="https://github.com/jasonmccreary/laravel-cfcache/actions"><img src="https://github.com/jasonmccreary/laravel-cfcache/workflows/Build/badge.svg" alt="Build Status"></a>
-    <a href="https://packagist.org/packages/jasonmccreary/laravel-cfcache"><img src="https://poser.pugx.org/jasonmccreary/laravel-cfcache/v/stable.svg" alt="Latest Stable Version"></a>
-    <a href="https://github.com/badges/poser/blob/master/LICENSE"><img src="https://poser.pugx.org/jasonmccreary/laravel-cfcache/license.svg" alt="License"></a>
+    <a href="https://github.com/nexxai/laravel-cfcache/actions"><img src="https://github.com/nexxai/laravel-cfcache/workflows/Build/badge.svg" alt="Build Status"></a>
+    <a href="https://packagist.org/packages/nexxai/laravel-cfcache"><img src="https://poser.pugx.org/nexxai/laravel-cfcache/v/stable.svg" alt="Latest Stable Version"></a>
+    <a href="https://github.com/badges/poser/blob/master/LICENSE"><img src="https://poser.pugx.org/nexxai/laravel-cfcache/license.svg" alt="License"></a>
 </p>
 
 # Laravel
@@ -16,7 +16,7 @@ A Laravel application running Laravel 12 or higher. _Not running a stable versio
 You can install this package by running the following command:
 
 ```sh
-composer require -W jasonmccreary/laravel-cfcache
+composer require -W nexxai/laravel-cfcache
 ```
 
 
