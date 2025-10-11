@@ -3,7 +3,9 @@
     "type": "library",
     "description": "WIP",
     "keywords": [
-        "laravel"
+        "laravel",
+        "cloudflare",
+        "cache"
     ],
     "license": "MIT",
     "require": {
@@ -23,13 +25,13 @@
     "extra": {
         "laravel": {
             "providers": [
-                "JMac\\Cloudflare\\PageCacheServiceProvider"
+                "JTSmith\\Cloudflare\\PageCacheServiceProvider"
             ]
         }
     },
     "autoload": {
         "psr-4": {
-            "JMac\\Cloudflare\\": "src/"
+            "JTSmith\\Cloudflare\\": "src/"
         }
     },
     "autoload-dev": {

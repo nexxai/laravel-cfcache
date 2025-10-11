@@ -2,7 +2,7 @@
 
 namespace Tests;
 
-use JMac\Cloudflare\PageCacheServiceProvider;
+use JTSmith\Cloudflare\PageCacheServiceProvider;
 use Orchestra\Testbench\Concerns\WithWorkbench;
 
 abstract class TestCase extends \Orchestra\Testbench\TestCase

@@ -1,6 +1,6 @@
 <?php
 
-namespace JMac\Cloudflare\Commands;
+namespace JTSmith\Cloudflare\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -15,7 +15,7 @@ class GenerateWafRule extends Command
      *
      * @var string
      */
-    protected $description = 'Command description';
+    protected $description = 'Generate a Cloudflare WAF whitelist rule based on your routes';
 
     /**
      * The name and signature of the console command.
@@ -27,7 +27,7 @@ class GenerateWafRule extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): void
     {
         Artisan::call('route:list', ['--json' => true]);
         $json = Artisan::output();
@@ -41,7 +41,8 @@ class GenerateWafRule extends Command
         $routes = $this->condense($routes);
         $rule = $this->expression($routes);
 
-        dump($rule);
+        $this->info('Generated Cloudflare WAF rule:');
+        $this->info($rule);
     }
 
     private function placeholders(Collection $routes): Collection
