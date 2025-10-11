@@ -33,6 +33,6 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
      */
     public function provides(): array
     {
-        return [];
+        return [GenerateWafRule::class];
     }
 }
