@@ -98,6 +98,7 @@ class SimplifyWafRuleTest extends TestCase
             '/api/users/*/comments/*',
         ]);
 
+        // The collection should be de-duplicated and sorted alphabetically
         $expected = collect([
             '/api/users/*/comments/*',
             '/api/users/*/posts/*',
@@ -106,5 +107,22 @@ class SimplifyWafRuleTest extends TestCase
         $optimized = (new SimplifyWafRule)->optimize($paths);
 
         $this->assertEquals($expected, $optimized);
+    }
+
+    #[Test]
+    public function it_will_handle_duplicate_paths_when_condensing(): void
+    {
+        $paths = collect([
+            '/api/users/*/posts/*',
+            '/api/users/*/comments/*',
+        ]);
+
+        $expected = collect([
+            '/api/users/*',
+        ]);
+
+        $condensed = (new SimplifyWafRule)->condense($paths);
+
+        $this->assertEquals($expected, $condensed);
     }
 }

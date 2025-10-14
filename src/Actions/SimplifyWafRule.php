@@ -232,11 +232,33 @@ class SimplifyWafRule
             return $group->first();
         }
 
-        $segments = explode('/', trim($prefix, '/'));
-        if (count($segments) === 1) {
-            return $prefix.'/*';
+        // Determine the nearest shared ancestor among the group's paths
+        $segmentLists = $group->map(function ($path) {
+            $clean = \Illuminate\Support\Str::before($path, '/*');
+
+            return explode('/', trim($clean, '/'));
+        })->values();
+
+        // Compute longest common prefix of segments
+        $lcp = [];
+        $first = $segmentLists->first();
+        foreach ($first as $i => $seg) {
+            $allMatch = $segmentLists->every(function ($segments) use ($i, $seg) {
+                return isset($segments[$i]) && $segments[$i] === $seg;
+            });
+
+            if (! $allMatch) {
+                break;
+            }
+
+            $lcp[] = $seg;
         }
 
-        return '/'.$segments[0].'/*';
+        // If no common segments beyond root, fall back to provided prefix
+        if (count($lcp) === 0) {
+            return rtrim($prefix, '/').'/*';
+        }
+
+        return '/'.implode('/', $lcp).'/*';
     }
 }
