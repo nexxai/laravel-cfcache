@@ -8,44 +8,32 @@ use Illuminate\Support\Str;
 class SimplifyWafRule
 {
     /**
-     * Optimize a list of paths.
+     * Optimize a list of paths by:
+     * - Normalizing and sorting input
+     * - Dropping duplicates
+     * - Skipping entries covered by previously-added wildcard rules
+     * - Removing entries that become redundant when a new wildcard is added
      *
      * @param  Collection<string>  $paths
      * @return Collection<string>
      */
     public function optimize(Collection $paths): Collection
     {
-        // Normalize and sort
-        $paths = $paths->map(function (string $path) {
-            return Str::startsWith($path, '/') ? $path : '/'.$path;
-        })->sort()->values();
+        $paths = $this->normalizeAndSort($paths);
 
         $optimized = collect();
 
         foreach ($paths as $path) {
-            // Skip exact duplicates
-            if ($optimized->contains($path)) {
+            if ($this->isExactDuplicate($optimized, $path)) {
                 continue;
             }
 
-            // If path is already covered by an existing wildcard rule, skip it
-            $isCovered = $optimized->contains(function ($existing) use ($path) {
-                if (Str::contains($existing, '*')) {
-                    return $this->pathMatchesWildcard($path, $existing);
-                }
-
-                return false;
-            });
-
-            if ($isCovered) {
+            if ($this->isCoveredByExistingWildcards($optimized, $path)) {
                 continue;
             }
 
-            // If adding a wildcard path, remove entries it actually covers
-            if (Str::contains($path, '*')) {
-                $optimized = $optimized->reject(function ($existing) use ($path) {
-                    return $this->pathMatchesWildcard($existing, $path);
-                })->values();
+            if ($this->containsWildcard($path)) {
+                $optimized = $this->removeEntriesCoveredByWildcard($optimized, $path);
             }
 
             $optimized->push($path);
@@ -102,84 +90,153 @@ class SimplifyWafRule
      */
     public function condense(Collection $paths): Collection
     {
-        // Separate paths: those ending with /* vs those that don't (including mid-path wildcards)
-        $wildcardPaths = $paths->filter(fn ($path) => Str::endsWith($path, '/*'));
-        $otherPaths = $paths->reject(fn ($path) => Str::endsWith($path, '/*'));
+        [$endingWildcards, $nonEnding] = $this->splitByEndingWildcard($paths);
 
         $condensed = collect();
 
-        // Group non-ending-wildcard paths by their first two segments
-        $grouped = $otherPaths->groupBy(function ($path) {
-            // For paths with wildcards in the middle, get prefix before first /*
-            $beforeWildcard = Str::contains($path, '/*') ? Str::before($path, '/*') : $path;
+        // Condense non-ending-wildcard paths by grouping on likely common ancestor
+        $grouped = $this->groupNonEndingWildcardPaths($nonEnding);
+        foreach ($grouped as $prefix => $group) {
+            if ($this->prefixCoveredByEndingWildcard($endingWildcards, $prefix)) {
+                continue;
+            }
 
+            $condensed->push($this->condenseNonEndingGroup($prefix, $group));
+        }
+
+        // Condense ending-wildcard paths by their top-level segment
+        $wildcardGrouped = $this->groupEndingWildcardsByTopLevel($endingWildcards);
+        foreach ($wildcardGrouped as $prefix => $group) {
+            $condensed->push($this->condenseEndingWildcardGroup($prefix, $group));
+        }
+
+        return $condensed->sort()->values();
+    }
+
+    /**
+     * @param  Collection<string>  $paths
+     */
+    protected function normalizeAndSort(Collection $paths): Collection
+    {
+        return $paths->map(function (string $path) {
+            return Str::startsWith($path, '/') ? $path : '/'.$path;
+        })->sort()->values();
+    }
+
+    /**
+     * @param  Collection<string>  $optimized
+     */
+    protected function isExactDuplicate(Collection $optimized, string $path): bool
+    {
+        return $optimized->contains($path);
+    }
+
+    /**
+     * @param  Collection<string>  $optimized
+     */
+    protected function isCoveredByExistingWildcards(Collection $optimized, string $path): bool
+    {
+        return $optimized->contains(function ($existing) use ($path) {
+            return $this->containsWildcard($existing) && $this->pathMatchesWildcard($path, $existing);
+        });
+    }
+
+    /**
+     * @param  Collection<string>  $optimized
+     */
+    protected function removeEntriesCoveredByWildcard(Collection $optimized, string $wildcard): Collection
+    {
+        return $optimized->reject(function ($existing) use ($wildcard) {
+            return $this->pathMatchesWildcard($existing, $wildcard);
+        })->values();
+    }
+
+    protected function containsWildcard(string $path): bool
+    {
+        return Str::contains($path, '*');
+    }
+
+    /**
+     * @param  Collection<string>  $paths
+     * @return array{0: Collection<string>, 1: Collection<string>} [endingWildcards, nonEnding]
+     */
+    protected function splitByEndingWildcard(Collection $paths): array
+    {
+        $ending = $paths->filter(fn ($path) => Str::endsWith($path, '/*'));
+        $nonEnding = $paths->reject(fn ($path) => Str::endsWith($path, '/*'));
+
+        return [$ending, $nonEnding];
+    }
+
+    /**
+     * @param  Collection<string>  $nonEnding
+     * @return Collection<string, Collection<string>>
+     */
+    protected function groupNonEndingWildcardPaths(Collection $nonEnding): Collection
+    {
+        return $nonEnding->groupBy(function ($path) {
+            $beforeWildcard = Str::contains($path, '/*') ? Str::before($path, '/*') : $path;
             $segments = explode('/', trim($beforeWildcard, '/'));
 
-            // If only one segment, that's the group
             if (count($segments) === 1) {
                 return '/'.$segments[0];
             }
 
-            // Use first two segments as the most specific shared ancestor
             return '/'.$segments[0].'/'.$segments[1];
         });
+    }
 
-        foreach ($grouped as $prefix => $group) {
-            // Check if any existing ending-wildcard already covers this prefix
-            $alreadyCovered = $wildcardPaths->contains(function ($wildcard) use ($prefix) {
-                $wildcardPrefix = Str::before($wildcard, '/*');
+    /** @param Collection<string> $endingWildcards */
+    protected function prefixCoveredByEndingWildcard(Collection $endingWildcards, string $prefix): bool
+    {
+        return $endingWildcards->contains(function ($wildcard) use ($prefix) {
+            $wildcardPrefix = Str::before($wildcard, '/*');
 
-                return Str::startsWith($prefix, $wildcardPrefix.'/') || $prefix === $wildcardPrefix;
-            });
+            return Str::startsWith($prefix, $wildcardPrefix.'/') || $prefix === $wildcardPrefix;
+        });
+    }
 
-            if ($alreadyCovered) {
-                continue;
-            }
-
-            if ($group->count() === 1) {
-                // Only one path with this prefix, keep as-is
-                $condensed->push($group->first());
-            } else {
-                // Multiple paths with same prefix
-                $allExactMatch = $group->every(fn ($path) => $path === $prefix);
-
-                if ($allExactMatch) {
-                    // All identical, add once
-                    $condensed->push($prefix);
-                } else {
-                    // Multiple different paths with same prefix, use wildcard
-                    $condensed->push($prefix.'/*');
-                }
-            }
+    /**
+     * @param  Collection<string>  $group
+     */
+    protected function condenseNonEndingGroup(string $prefix, Collection $group): string
+    {
+        if ($group->count() === 1) {
+            return $group->first();
         }
 
-        // Group ending-wildcard paths by their top-level segment so successive passes can bubble up
-        $wildcardGrouped = $wildcardPaths->groupBy(function ($path) {
+        $allExactMatch = $group->every(fn ($path) => $path === $prefix);
+
+        return $allExactMatch ? $prefix : $prefix.'/*';
+    }
+
+    /**
+     * @param  Collection<string>  $endingWildcards
+     */
+    protected function groupEndingWildcardsByTopLevel(Collection $endingWildcards): Collection
+    {
+        return $endingWildcards->groupBy(function ($path) {
             $cleanPath = Str::before($path, '/*');
             $segments = explode('/', trim($cleanPath, '/'));
 
-            // Always group by the first segment (top-level ancestor)
             return isset($segments[0]) && $segments[0] !== '' ? '/'.$segments[0] : '/';
         });
+    }
 
-        foreach ($wildcardGrouped as $prefix => $group) {
-            if ($group->count() === 1) {
-                // Only one wildcard path with this prefix, keep as-is
-                $condensed->push($group->first());
-            } else {
-                // Multiple wildcard paths share this parent, condense to parent wildcard
-                $segments = explode('/', trim($prefix, '/'));
-
-                if (count($segments) === 1) {
-                    // Already at top level, just use it
-                    $condensed->push($prefix.'/*');
-                } else {
-                    // Go up one level: use only first segment
-                    $condensed->push('/'.$segments[0].'/*');
-                }
-            }
+    /**
+     * @param  Collection<string>  $group
+     */
+    protected function condenseEndingWildcardGroup(string $prefix, Collection $group): string
+    {
+        if ($group->count() === 1) {
+            return $group->first();
         }
 
-        return $condensed->sort()->values();
+        $segments = explode('/', trim($prefix, '/'));
+        if (count($segments) === 1) {
+            return $prefix.'/*';
+        }
+
+        return '/'.$segments[0].'/*';
     }
 }
