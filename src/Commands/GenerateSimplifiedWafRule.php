@@ -129,35 +129,24 @@ class GenerateSimplifiedWafRule extends Command
         // Start by replacing placeholders
         $work = $this->placeholders($routes);
 
-        $previous = null;
-        $attempts = 0;
-        $maxAttempts = 5; // safety cap to avoid infinite loops
-        $rule = '';
         $waf_rule = new SimplifyWafRule;
+        $optimized = $waf_rule->optimize($work);
+        $rule = $this->expression($optimized);
+
+        if (Str::length($rule) <= 4000) {
+            return $rule;
+        }
 
         do {
-            $optimized = $waf_rule->optimize($work);
-            $rule = $this->expression($optimized);
-
-            if (Str::length($rule) <= 4000) {
-                return $rule;
-            }
-
-            // If no change from previous iteration, we can't reduce further
-            if ($previous !== null && $optimized->values()->toJson() === $previous->values()->toJson()) {
-                break;
-            }
-
             $condensed = $waf_rule->condense($optimized);
+        } while ($condensed !== $optimized && $optimized = $condensed);
 
-            $previous = $condensed;
-            $work = $condensed; // feed condensed paths back in for another pass
-            $attempts++;
-        } while ($attempts < $maxAttempts);
-
-        // If we reach here, we could not get under 4000 characters
-        $this->error('Unable to create a single Cloudflare WAF rule under 4000 characters after simplification.');
-        $this->error('This rule will need to be manually condensed further.');
+        $rule = $this->expression($optimized);
+        if (Str::length($rule) > 4000) {
+            // If we reach here, we could not get under 4000 characters
+            $this->error('Unable to create a single Cloudflare WAF rule under 4000 characters after simplification.');
+            $this->error('This rule will need to be manually condensed further.');
+        }
 
         return $rule; // return best-effort expression even if too long
     }

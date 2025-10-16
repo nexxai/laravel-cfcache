@@ -40,7 +40,6 @@ class SimplifyWafRuleTest extends TestCase
         ]);
 
         $optimized = (new SimplifyWafRule)->optimize($paths);
-
         $this->assertEquals($expected, $optimized);
     }
 
@@ -105,7 +104,6 @@ class SimplifyWafRuleTest extends TestCase
         ]);
 
         $optimized = (new SimplifyWafRule)->optimize($paths);
-
         $this->assertEquals($expected, $optimized);
     }
 
@@ -122,7 +120,6 @@ class SimplifyWafRuleTest extends TestCase
         ]);
 
         $condensed = (new SimplifyWafRule)->condense($paths);
-
         $this->assertEquals($expected, $condensed);
     }
 }
