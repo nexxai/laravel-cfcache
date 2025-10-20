@@ -31,24 +31,6 @@ class GenerateWafRule extends Command
         $this->line($rule);
     }
 
-    private function simplify(Collection $routes): Collection
-    {
-        $prefixes = collect([]);
-
-        // Replace placeholders with asterisks
-        $routes = $routes->map(function ($route) {
-            return preg_replace('/\{[^}]+\}/', '*', $route);
-        });
-
-        foreach ($routes as $route) {
-            if (! $prefixes->contains($route)) {
-                $prefixes[] = $route;
-            }
-        }
-
-        return $prefixes;
-    }
-
     private function placeholders(Collection $routes): Collection
     {
         return $routes->map(function ($route) {
@@ -109,7 +91,6 @@ class GenerateWafRule extends Command
 
     private function generateRule($routes): string
     {
-        // Start by replacing placeholders
         $work = $this->placeholders($routes);
 
         $waf_rule = new SimplifyWafRule;
@@ -126,11 +107,9 @@ class GenerateWafRule extends Command
 
         $rule = $this->expression($optimized);
         if (Str::length($rule) > 4000) {
-            // If we reach here, we could not get under 4000 characters
-            $this->error('Unable to create a single Cloudflare WAF rule under 4000 characters after simplification.');
-            $this->error('This rule will need to be manually condensed further.');
+            $this->error('Unable to generate a single expression under the 4096 characters limit. You will need to review and condense the expression yourself.');
         }
 
-        return $rule; // return best-effort expression even if too long
+        return $rule;
     }
 }
