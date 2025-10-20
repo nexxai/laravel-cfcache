@@ -4,7 +4,7 @@ namespace JTSmith\Cloudflare;
 
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
-use JTSmith\Cloudflare\Commands\GenerateSimplifiedWafRule;
+use JTSmith\Cloudflare\Commands\GenerateWafRule;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
 
 class PageCacheServiceProvider extends ServiceProvider implements DeferrableProvider
@@ -17,7 +17,7 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
         if ($this->app->runningInConsole()) {
             $this->commands([
                 GenerateWafRule::class,
-                GenerateSimplifiedWafRule::class,
+                GenerateWafRule::class,
             ]);
         }
     }
@@ -35,6 +35,6 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
      */
     public function provides(): array
     {
-        return [GenerateWafRule::class, GenerateSimplifiedWafRule::class];
+        return [GenerateWafRule::class, GenerateWafRule::class];
     }
 }

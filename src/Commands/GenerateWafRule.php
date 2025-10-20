@@ -7,26 +7,14 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use JTSmith\Cloudflare\Actions\SimplifyWafRule;
 
 class GenerateWafRule extends Command
 {
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Generate a Cloudflare WAF whitelist rule based on your routes';
+    protected $description = 'Generate a Cloudflare security rule for the endpoints available in your application';
 
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'cloudflare:waf-rule';
 
-    /**
-     * Execute the console command.
-     */
     public function handle(): void
     {
         Artisan::call('route:list', ['--json' => true]);
@@ -37,12 +25,28 @@ class GenerateWafRule extends Command
             ->merge($this->publicPaths())
             ->unique();
 
-        $routes = $this->placeholders($routes);
-        $routes = $this->condense($routes);
-        $rule = $this->expression($routes);
+        $rule = $this->generateRule($routes);
 
-        $this->info('Generated Cloudflare WAF rule:');
-        $this->info($rule);
+        $this->info('Generated Cloudflare WAF rule: ('.Str::length($rule).' characters)');
+        $this->line($rule);
+    }
+
+    private function simplify(Collection $routes): Collection
+    {
+        $prefixes = collect([]);
+
+        // Replace placeholders with asterisks
+        $routes = $routes->map(function ($route) {
+            return preg_replace('/\{[^}]+\}/', '*', $route);
+        });
+
+        foreach ($routes as $route) {
+            if (! $prefixes->contains($route)) {
+                $prefixes[] = $route;
+            }
+        }
+
+        return $prefixes;
     }
 
     private function placeholders(Collection $routes): Collection
@@ -56,31 +60,38 @@ class GenerateWafRule extends Command
         });
     }
 
-    private function condense(Collection $routes): Collection
-    {
-        return $routes->groupBy(fn ($route) => str_contains($route, '*'));
-    }
-
     private function expression(Collection $routes): string
     {
-        $expression = '';
+        $expression = 'not {';
 
-        if ($routes->get(0)->isNotEmpty()) {
-            $expression .= sprintf(
-                'http.request.uri.path in {"%s"}',
-                $routes->get(0)->join('" "')
-            );
-        }
+        $wildcards = $routes->filter(function ($route) {
+            return Str::endsWith($route, '/*');
+        });
 
-        if ($routes->get(1)->isNotEmpty()) {
-            if ($expression !== '') {
-                $expression .= ' and ';
+        $paths = $routes->filter(function ($route) {
+            return ! Str::endsWith($route, '/*');
+        });
+
+        if ($wildcards->isNotEmpty()) {
+            $expression .= $wildcards->map(function ($route) {
+                return sprintf(
+                    'http.request.uri.path wildcard "%s"',
+                    $route
+                );
+            })->join(' or ');
+
+            if ($paths->isNotEmpty()) {
+                $expression .= ' or ';
             }
-
-            $expression .= $routes->get(1)->map(function ($route) {
-                return 'http.request.uri.path wildcard "'.$route.'"';
-            })->join(' and ');
         }
+
+        if ($paths->isNotEmpty()) {
+            $expression .= 'http.request.uri.path in {"';
+            $expression .= implode('" or "', $paths->toArray());
+            $expression .= '"}';
+        }
+
+        $expression .= '}';
 
         return $expression;
     }
@@ -94,5 +105,32 @@ class GenerateWafRule extends Command
             ->reject(fn ($path) => in_array($path, ['.', '..', '.htaccess', 'index.php']))
             ->map(fn ($path) => File::isDirectory(public_path($path)) ? $path.'/*' : $path)
             ->all();
+    }
+
+    private function generateRule($routes): string
+    {
+        // Start by replacing placeholders
+        $work = $this->placeholders($routes);
+
+        $waf_rule = new SimplifyWafRule;
+        $optimized = $waf_rule->optimize($work);
+        $rule = $this->expression($optimized);
+
+        if (Str::length($rule) <= 4000) {
+            return $rule;
+        }
+
+        do {
+            $condensed = $waf_rule->condense($optimized);
+        } while ($condensed !== $optimized && $optimized = $condensed);
+
+        $rule = $this->expression($optimized);
+        if (Str::length($rule) > 4000) {
+            // If we reach here, we could not get under 4000 characters
+            $this->error('Unable to create a single Cloudflare WAF rule under 4000 characters after simplification.');
+            $this->error('This rule will need to be manually condensed further.');
+        }
+
+        return $rule; // return best-effort expression even if too long
     }
 }
