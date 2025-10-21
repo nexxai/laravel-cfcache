@@ -172,6 +172,7 @@ class WafRule
                 if ($existing === $wc) {
                     return true; // keep the wildcard itself
                 }
+
                 return ! $this->pathMatchesWildcard($existing, $wc);
             })->values();
         }
