@@ -4,7 +4,7 @@
     <a href="https://github.com/badges/poser/blob/master/LICENSE"><img src="https://poser.pugx.org/nexxai/laravel-cfcache/license.svg" alt="License"></a>
 </p>
 
-# Laravel
+# Laravel Cloudflare Cache
 
 This package is a WIP. It currently contains a command to generate the expression for a Cloudflare security rule for your Laravel application routes.
 
