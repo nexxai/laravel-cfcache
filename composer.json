@@ -1,7 +1,7 @@
 {
     "name": "nexxai/laravel-cfcache",
     "type": "library",
-    "description": "WIP",
+    "description": "A handful of Cloudflare cache helpers for Laravel",
     "keywords": [
         "laravel",
         "cloudflare",
