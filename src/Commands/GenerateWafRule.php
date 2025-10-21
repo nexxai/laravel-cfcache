@@ -7,7 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-use JTSmith\Cloudflare\Actions\SimplifyWafRule;
+use JTSmith\Cloudflare\Actions\WafRule;
 
 class GenerateWafRule extends Command
 {
@@ -20,65 +20,33 @@ class GenerateWafRule extends Command
         Artisan::call('route:list', ['--json' => true]);
         $json = Artisan::output();
 
-        $routes = collect(json_decode($json, true))
-            ->pluck('uri')
-            ->merge($this->publicPaths())
-            ->unique();
-
+        $routes = $this->routes($json);
         $rule = $this->generateRule($routes);
 
         $this->info('Generated Cloudflare WAF rule: ('.Str::length($rule).' characters)');
         $this->line($rule);
     }
 
-    private function placeholders(Collection $routes): Collection
+    public function routes(string $json): Collection
     {
-        return $routes->map(function ($route) {
-            if (! str_contains($route, '{')) {
-                return $route;
-            }
+        return collect(json_decode($json, true))
+            ->pluck('uri')
+            ->merge($this->publicPaths())
+            ->unique()
+            ->map(function ($route) {
+                if (! str_contains($route, '{')) {
+                    return $route;
+                }
 
-            return preg_replace('/\{[^}]+\}/', '*', $route);
-        });
+                return preg_replace('/\{[^}]+\}/', '*', $route);
+            })
+            ->reject(function ($route) {
+                return $route === '*';
+            })
+            ->values();
     }
 
-    private function expression(Collection $routes): string
-    {
-        $expression = 'not {';
-
-        $wildcards = $routes->filter(function ($route) {
-            return Str::endsWith($route, '/*');
-        });
-
-        $paths = $routes->filter(function ($route) {
-            return ! Str::endsWith($route, '/*');
-        });
-
-        if ($wildcards->isNotEmpty()) {
-            $expression .= $wildcards->map(function ($route) {
-                return sprintf(
-                    'http.request.uri.path wildcard "%s"',
-                    $route
-                );
-            })->join(' or ');
-
-            if ($paths->isNotEmpty()) {
-                $expression .= ' or ';
-            }
-        }
-
-        if ($paths->isNotEmpty()) {
-            $expression .= 'http.request.uri.path in {"';
-            $expression .= implode('" or "', $paths->toArray());
-            $expression .= '"}';
-        }
-
-        $expression .= '}';
-
-        return $expression;
-    }
-
-    private function publicPaths(): array
+    public function publicPaths(): array
     {
         $glob = File::glob(base_path('public/{,.}*'), GLOB_BRACE);
 
@@ -89,23 +57,24 @@ class GenerateWafRule extends Command
             ->all();
     }
 
-    private function generateRule($routes): string
+    public function generateRule($routes): string
     {
-        $work = $this->placeholders($routes);
-
-        $waf_rule = new SimplifyWafRule;
-        $optimized = $waf_rule->optimize($work);
-        $rule = $this->expression($optimized);
+        $waf_rule = new WafRule;
+        $rule = $waf_rule->optimize($routes);
 
         if (Str::length($rule) <= 4000) {
             return $rule;
         }
 
         do {
-            $condensed = $waf_rule->condense($optimized);
-        } while ($condensed !== $optimized && $optimized = $condensed);
+            $previous = $rule;
+            $rule = $waf_rule->condense();
 
-        $rule = $this->expression($optimized);
+            if (Str::length($rule) <= 4000) {
+                return $rule;
+            }
+        } while ($rule !== $previous);
+
         if (Str::length($rule) > 4000) {
             $this->error('Unable to generate a single expression under the 4096 characters limit. You will need to review and condense the expression yourself.');
         }
