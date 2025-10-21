@@ -5,7 +5,7 @@
 </p>
 
 # Laravel
-This package is a WIP.
+This package is a WIP. It currently contains a command to generate the expression for a Cloudflare security rule for your Laravel application routes.
 
 
 ## Requirements
