@@ -24,7 +24,7 @@ class WafRule
      * @param  Collection<string>  $paths
      * @return string Cloudflare expression for the optimized routes
      */
-    public function optimize(Collection $paths): string
+    public function optimize(Collection $paths): Collection
     {
         $paths = $this->normalizeAndSort($paths);
 
@@ -46,9 +46,9 @@ class WafRule
             $optimized->push($path);
         }
 
-        $this->routes = $optimized->values();
+        $this->routes = collect($optimized);
 
-        return $this->expression($this->routes);
+        return $this->routes;
     }
 
     /**
@@ -125,7 +125,7 @@ class WafRule
      *
      * @param  Collection<string>|array|null  $paths  Optional set of paths to condense; if null, uses internal routes.
      */
-    public function condense(Collection|array|null $paths = null): string
+    public function condense(Collection|array|null $paths = null): Collection
     {
         // Determine the working set of paths
         if ($paths instanceof Collection) {
@@ -180,9 +180,9 @@ class WafRule
         // De-duplicate any accidentally duplicated routes produced during condensation
         $final = $final->unique()->values();
 
-        $this->routes = $final->sort()->values();
+        $this->routes = collect($final->sort()->values());
 
-        return $this->expression($this->routes);
+        return $this->routes;
     }
 
     /**

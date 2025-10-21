@@ -62,23 +62,23 @@ class GenerateWafRule extends Command
         $waf_rule = new WafRule;
         $rule = $waf_rule->optimize($routes);
 
-        if (Str::length($rule) <= 4000) {
-            return $rule;
+        if (Str::length($waf_rule->expression()) <= 4000) {
+            return $waf_rule->expression();
         }
 
         do {
             $previous = $rule;
             $rule = $waf_rule->condense();
 
-            if (Str::length($rule) <= 4000) {
-                return $rule;
+            if (Str::length($waf_rule->expression()) <= 4000) {
+                return $waf_rule->expression();
             }
         } while ($rule !== $previous);
 
-        if (Str::length($rule) > 4000) {
+        if (Str::length($waf_rule->expression()) > 4000) {
             $this->error('Unable to generate a single expression under the 4096 characters limit. You will need to review and condense the expression yourself.');
         }
 
-        return $rule;
+        return $waf_rule->expression();
     }
 }

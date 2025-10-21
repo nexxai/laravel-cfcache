@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use JTSmith\Cloudflare\Actions\SimplifyWafRule;
+use JTSmith\Cloudflare\Actions\WafRule;
 use Orchestra\Testbench\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
-class SimplifyWafRuleTest extends TestCase
+class WafRuleTest extends TestCase
 {
     #[Test]
     public function it_can_optimize_a_list_of_paths(): void
@@ -39,7 +39,7 @@ class SimplifyWafRuleTest extends TestCase
             '/blog/*',
         ]);
 
-        $optimized = (new SimplifyWafRule)->optimize($paths);
+        $optimized = (new WafRule)->optimize($paths);
         $this->assertEquals($expected, $optimized);
     }
 
@@ -61,7 +61,8 @@ class SimplifyWafRuleTest extends TestCase
             '/mailcoach/1234/1234/1234/*/1234/1234',
         ]);
 
-        $paths = (new SimplifyWafRule)->optimize($paths);
+        $waf_rule = new WafRule;
+        $paths = $waf_rule->optimize($paths);
 
         // First we condense down to the two mailcoach paths
         $first_expected = collect([
@@ -72,7 +73,7 @@ class SimplifyWafRuleTest extends TestCase
             '/mailcoach/5678/*',
         ]);
 
-        $first_condensed = (new SimplifyWafRule)->condense($paths);
+        $first_condensed = $waf_rule->condense($paths);
         $this->assertEquals($first_expected, $first_condensed);
 
         // Then we can do a second pass to condense those two mailcoach paths down to a single one
@@ -83,7 +84,7 @@ class SimplifyWafRuleTest extends TestCase
             '/mailcoach/*',
         ]);
 
-        $second_condensed = (new SimplifyWafRule)->condense($first_condensed);
+        $second_condensed = $waf_rule->condense($first_condensed);
         $this->assertEquals($second_expected, $second_condensed);
     }
 
@@ -103,7 +104,7 @@ class SimplifyWafRuleTest extends TestCase
             '/api/users/*/posts/*',
         ]);
 
-        $optimized = (new SimplifyWafRule)->optimize($paths);
+        $optimized = (new WafRule)->optimize($paths);
         $this->assertEquals($expected, $optimized);
     }
 
@@ -119,7 +120,7 @@ class SimplifyWafRuleTest extends TestCase
             '/api/users/*',
         ]);
 
-        $condensed = (new SimplifyWafRule)->condense($paths);
+        $condensed = (new WafRule)->condense($paths);
         $this->assertEquals($expected, $condensed);
     }
 }
