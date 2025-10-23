@@ -123,4 +123,20 @@ class WafRuleTest extends TestCase
         $condensed = (new WafRule)->condense($paths);
         $this->assertEquals($expected, $condensed);
     }
+
+    #[Test]
+    public function it_properly_groups_routes_with_trailing_wildcards_in_the_wildcard_group(): void
+    {
+        $paths = collect([
+            '/@*',
+            '/prefix*',
+        ]);
+
+        $rule = new WafRule;
+        $optimized = $rule->optimize($paths);
+
+        $expected = 'not (http.request.uri.path wildcard "/@*" or http.request.uri.path wildcard "/prefix*")';
+
+        $this->assertEquals($expected, $rule->expression());
+    }
 }

@@ -292,12 +292,14 @@ class WafRule
         $routes = $routes ?? $this->routes;
         $expression = 'not (';
 
+        // Anything containing a wildcard character should use the Cloudflare `wildcard` operator.
         $wildcards = $routes->filter(function ($route) {
-            return Str::endsWith($route, '/*');
+            return $this->containsWildcard($route);
         });
 
+        // Everything else (no wildcard characters) can be grouped in the `in {}` set.
         $paths = $routes->filter(function ($route) {
-            return ! Str::endsWith($route, '/*');
+            return ! $this->containsWildcard($route);
         });
 
         if ($wildcards->isNotEmpty()) {
