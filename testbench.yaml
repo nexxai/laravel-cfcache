@@ -1,0 +1,11 @@
+providers:
+  - JTSmith\Cloudflare\PageCacheServiceProvider
+
+discovers:
+  commands: true
+  config: true
+
+workbench:
+  install: false
+  discovers:
+    config: true
