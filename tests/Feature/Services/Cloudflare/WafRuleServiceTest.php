@@ -1,18 +1,18 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Services\Cloudflare;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use JTSmith\Cloudflare\DTOs\WafRuleResult;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
-use JTSmith\Cloudflare\Http\CloudflareApiClient;
-use JTSmith\Cloudflare\Services\CloudflareService;
+use JTSmith\Cloudflare\Http\Clients\WafApiClient;
+use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 use Mockery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-class CloudflareServiceTest extends TestCase
+class WafRuleServiceTest extends TestCase
 {
     protected array $validConfig;
 
@@ -24,17 +24,19 @@ class CloudflareServiceTest extends TestCase
             'api' => [
                 'token' => 'test-token-1234567890abcdefghijklmnopqrstuvw',
                 'zone_id' => 'a1b2c3d4e5f678901234567890123456',
+                'settings' => [
+                    'base_url' => 'https://api.cloudflare.com/client/v4',
+                    'timeout' => 30,
+                    'retry_attempts' => 3,
+                    'retry_delay' => 1000,
+                ],
             ],
-            'waf' => [
-                'rule_identifier' => 'test-rule',
-                'rule_description' => 'Test WAF Rule',
-                'rule_action' => 'block',
-            ],
-            'settings' => [
-                'base_url' => 'https://api.cloudflare.com/client/v4',
-                'timeout' => 30,
-                'retry_attempts' => 3,
-                'retry_delay' => 1000,
+            'features' => [
+                'waf' => [
+                    'rule_identifier' => 'test-rule',
+                    'rule_description' => 'Test WAF Rule',
+                    'rule_action' => 'block',
+                ],
             ],
         ];
     }
@@ -57,7 +59,7 @@ class CloudflareServiceTest extends TestCase
             ], 401),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
 
         try {
             $service->syncRule('test expression');
@@ -80,7 +82,7 @@ class CloudflareServiceTest extends TestCase
             ], 429, ['Retry-After' => '60']),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
 
         try {
             $service->syncRule('test expression');
@@ -104,7 +106,7 @@ class CloudflareServiceTest extends TestCase
             ], 404),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
 
         try {
             $service->syncRule('test expression');
@@ -144,7 +146,7 @@ class CloudflareServiceTest extends TestCase
             ]),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
         $result = $service->syncRule('test expression');
 
         $this->assertInstanceOf(WafRuleResult::class, $result);
@@ -193,7 +195,7 @@ class CloudflareServiceTest extends TestCase
             ]),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
         $result = $service->syncRule('updated expression');
 
         $this->assertInstanceOf(WafRuleResult::class, $result);
@@ -209,7 +211,7 @@ class CloudflareServiceTest extends TestCase
     #[Test]
     public function it_creates_rule_using_api_client(): void
     {
-        $mockClient = Mockery::mock(CloudflareApiClient::class);
+        $mockClient = Mockery::mock(WafApiClient::class);
 
         $mockClient->shouldReceive('getFirewallRules')
             ->once()
@@ -242,7 +244,7 @@ class CloudflareServiceTest extends TestCase
                 ],
             ]);
 
-        $service = new CloudflareService($this->validConfig, $mockClient);
+        $service = new WafRuleService($this->validConfig, $mockClient);
         $result = $service->syncRule('test expression');
 
         $this->assertInstanceOf(WafRuleResult::class, $result);
@@ -254,7 +256,7 @@ class CloudflareServiceTest extends TestCase
     #[Test]
     public function it_updates_rule_using_api_client(): void
     {
-        $mockClient = Mockery::mock(CloudflareApiClient::class);
+        $mockClient = Mockery::mock(WafApiClient::class);
 
         $mockClient->shouldReceive('getFirewallRules')
             ->once()
@@ -288,7 +290,7 @@ class CloudflareServiceTest extends TestCase
                 'expression' => 'updated expression',
             ]);
 
-        $service = new CloudflareService($this->validConfig, $mockClient);
+        $service = new WafRuleService($this->validConfig, $mockClient);
         $result = $service->syncRule('updated expression');
 
         $this->assertInstanceOf(WafRuleResult::class, $result);
@@ -336,7 +338,7 @@ class CloudflareServiceTest extends TestCase
             return Http::response([], 404);
         });
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
 
         try {
             $service->syncRule('test expression');
@@ -359,7 +361,7 @@ class CloudflareServiceTest extends TestCase
             ], 400),
         ]);
 
-        $service = new CloudflareService($this->validConfig);
+        $service = new WafRuleService($this->validConfig);
 
         try {
             $service->syncRule('test expression');

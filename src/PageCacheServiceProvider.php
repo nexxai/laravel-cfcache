@@ -5,7 +5,7 @@ namespace JTSmith\Cloudflare;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
-use JTSmith\Cloudflare\Services\CloudflareService;
+use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 
 class PageCacheServiceProvider extends ServiceProvider implements DeferrableProvider
 {
@@ -19,10 +19,10 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
                 GenerateWafRule::class,
             ]);
 
-            // Publish a configuration file
+            // Publish configuration file
             $this->publishes([
-                __DIR__.'/../config/cf-waf-rule.php' => config_path('cf-waf-rule.php'),
-            ], 'cf-waf-rule-config');
+                __DIR__.'/../config/cfcache.php' => config_path('cfcache.php'),
+            ], 'cfcache-config');
         }
     }
 
@@ -31,13 +31,15 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
      */
     public function register(): void
     {
+        // Merge configuration
         $this->mergeConfigFrom(
-            __DIR__.'/../config/cf-waf-rule.php',
-            'cf-waf-rule'
+            __DIR__.'/../config/cfcache.php',
+            'cfcache'
         );
 
-        $this->app->singleton(CloudflareService::class, function ($app) {
-            return new CloudflareService($app['config']->get('cf-waf-rule', []));
+        // Register the WAF rule service
+        $this->app->singleton(WafRuleService::class, function ($app) {
+            return new WafRuleService($app['config']->get('cfcache', []));
         });
     }
 
@@ -48,7 +50,7 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
     {
         return [
             GenerateWafRule::class,
-            CloudflareService::class,
+            WafRuleService::class,
         ];
     }
 }

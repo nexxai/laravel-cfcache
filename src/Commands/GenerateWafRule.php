@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Actions\WafRule;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
-use JTSmith\Cloudflare\Services\CloudflareService;
+use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 
 class GenerateWafRule extends Command
 {
@@ -97,7 +97,7 @@ class GenerateWafRule extends Command
         $this->newLine();
 
         try {
-            $service = app(CloudflareService::class);
+            $service = app(WafRuleService::class);
             $result = $service->syncRule($expression);
 
             $this->info($result->message);
