@@ -304,6 +304,12 @@ class WafRule
 
         if ($wildcards->isNotEmpty()) {
             $expression .= $wildcards->map(function ($route) {
+                // When condensing a path, anything after the first wildcard should be dropped.
+                // Ensure we only include up to the first '*' in the output expression.
+                if (Str::contains($route, '*')) {
+                    $route = Str::before($route, '*').'*';
+                }
+
                 return sprintf(
                     'http.request.uri.path wildcard "%s"',
                     $route

@@ -139,4 +139,19 @@ class WafRuleTest extends TestCase
 
         $this->assertEquals($expected, $rule->expression());
     }
+
+    #[Test]
+    public function it_will_properly_slice_off_anything_after_the_first_wildcard_in_a_path(): void
+    {
+        $paths = collect([
+            '/test/*/*',
+        ]);
+
+        $rule = new WafRule;
+        $optimized = $rule->condense($paths);
+
+        $expected = 'not (http.request.uri.path wildcard "/test/*")';
+
+        $this->assertEquals($expected, $rule->expression());
+    }
 }
