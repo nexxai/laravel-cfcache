@@ -271,16 +271,16 @@ class WafRule
      *
      * Shape:
      * not (
-     *   http.request.uri.path wildcard "/segment/*" or
-     *   http.request.uri.path in {"/a" "/b"}
+     *   http.request.uri.path in {"/a" "/b"} or
+     *   http.request.uri.path wildcard "/segment/*"
      * )
      *
-     * The expression places all trailing-wildcard routes (those ending with "/*") in the wildcard portion and
-     * all exact paths in the set literal
+     * The expression places all exact paths in the set literal first, followed by
+     * all trailing-wildcard routes (those ending with "/*") in the wildcard portion
      *
      * Examples:
-     * - Routes: ["/blog/*", "/about", "/contact"]
-     *   Expression: not (http.request.uri.path wildcard "/blog/*" or http.request.uri.path in {"/about" "/contact"})
+     * - Routes: ["/about", "/contact", "/blog/*"]
+     *   Expression: not (http.request.uri.path in {"/about" "/contact"} or http.request.uri.path wildcard "/blog/*")
      *
      * - Routes: ["/docs/*"]
      *   Expression: not (http.request.uri.path wildcard "/docs/*")
@@ -302,6 +302,16 @@ class WafRule
             return ! $this->containsWildcard($route);
         });
 
+        if ($paths->isNotEmpty()) {
+            $expression .= 'http.request.uri.path in {"';
+            $expression .= implode('" "', $paths->toArray());
+            $expression .= '"}';
+
+            if ($wildcards->isNotEmpty()) {
+                $expression .= ' or ';
+            }
+        }
+
         if ($wildcards->isNotEmpty()) {
             $expression .= $wildcards->map(function ($route) {
                 // When condensing a path, anything after the first wildcard should be dropped.
@@ -315,16 +325,6 @@ class WafRule
                     $route
                 );
             })->join(' or ');
-
-            if ($paths->isNotEmpty()) {
-                $expression .= ' or ';
-            }
-        }
-
-        if ($paths->isNotEmpty()) {
-            $expression .= 'http.request.uri.path in {"';
-            $expression .= implode('" "', $paths->toArray());
-            $expression .= '"}';
         }
 
         $expression .= ')';

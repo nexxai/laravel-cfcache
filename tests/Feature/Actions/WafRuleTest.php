@@ -154,4 +154,21 @@ class WafRuleTest extends TestCase
 
         $this->assertEquals($expected, $rule->expression());
     }
+
+    #[Test]
+    public function it_places_specific_paths_before_wildcards_in_the_expression(): void
+    {
+        $paths = collect([
+            '/about',
+            '/contact',
+            '/blog/*',
+        ]);
+
+        $rule = new WafRule;
+        $rule->optimize($paths);
+
+        $expected = 'not (http.request.uri.path in {"/about" "/contact"} or http.request.uri.path wildcard "/blog/*")';
+
+        $this->assertEquals($expected, $rule->expression());
+    }
 }
