@@ -145,6 +145,19 @@ return [
             */
 
             'rule_action' => env('CFCACHE_RULE_ACTION', 'block'),
+
+            /*
+            |--------------------------------------------------------------------------
+            | Ignorable Paths
+            |--------------------------------------------------------------------------
+            |
+            | A list of path patterns that should be ignored when generating the WAF rule.
+            | These paths will not be included in the allowlist, even if they exist in your routes.
+            | Supports wildcards (e.g., "/_dusk/*" will match "/_dusk/test").
+            |
+            */
+
+            'ignorable_paths' => ['/_dusk/*'],
         ],
     ],
 ];

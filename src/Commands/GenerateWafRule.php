@@ -37,7 +37,7 @@ class GenerateWafRule extends Command
 
     public function routes(string $json): Collection
     {
-        return collect(json_decode($json, true))
+        $routes = collect(json_decode($json, true))
             ->pluck('uri')
             ->merge($this->publicPaths())
             ->unique()
@@ -51,7 +51,12 @@ class GenerateWafRule extends Command
             ->reject(function ($route) {
                 return $route === '*';
             })
+            ->reject(function ($route) {
+                return $this->isIgnorablePath($route);
+            })
             ->values();
+
+        return $routes;
     }
 
     public function publicPaths(): array
@@ -89,6 +94,15 @@ class GenerateWafRule extends Command
         }
 
         return $waf_rule->expression();
+    }
+
+    protected function isIgnorablePath(string $route): bool
+    {
+        $ignorable = config('cfcache.features.waf.ignorable_paths') ?: ['/_dusk/*'];
+
+        return collect($ignorable)->contains(function ($pattern) use ($route) {
+            return Str::is($pattern, $route);
+        });
     }
 
     protected function syncToCloudflare(string $expression): void
