@@ -42,6 +42,9 @@ Once generated, you can copy and paste the expression into your domain's
 security rules by going to Security -> Security Rules -> Create Rule ->
 Custom Rule -> Edit expression
 
+Please see the [Notes](#notes) section below for additional information and
+potential gotchas.
+
 This command was inspired by Jason McCreary's tweet: [https://x.com/gonedark/status/1978458884948775294](https://x.com/gonedark/status/1978458884948775294)
 
 ### Advanced Usage
