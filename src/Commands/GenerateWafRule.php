@@ -48,6 +48,9 @@ class GenerateWafRule extends Command
 
                 return preg_replace('/\{[^}]+\}/', '*', $route);
             })
+            ->map(function ($route) {
+                return Str::startsWith($route, '/') ? $route : '/'.$route;
+            })
             ->reject(function ($route) {
                 return $route === '*';
             })
@@ -99,6 +102,9 @@ class GenerateWafRule extends Command
     protected function isIgnorablePath(string $route): bool
     {
         $ignorable = config('cfcache.features.waf.ignorable_paths') ?: ['/_dusk/*'];
+
+        // Normalize route to have leading slash to match pattern format
+        $route = Str::startsWith($route, '/') ? $route : '/'.$route;
 
         return collect($ignorable)->contains(function ($pattern) use ($route) {
             return Str::is($pattern, $route);

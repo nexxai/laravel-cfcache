@@ -19,10 +19,10 @@ class GenerateWafRuleTest extends TestCase
         // Mock route list JSON with some routes including ignorable ones
         $json = json_encode([
             ['uri' => '/'],
-            ['uri' => '/about'],
-            ['uri' => '/_dusk/login'],
-            ['uri' => '/admin/test'],
-            ['uri' => '/api/users'],
+            ['uri' => 'about'],
+            ['uri' => '_dusk/login'],
+            ['uri' => 'admin/test'],
+            ['uri' => 'api/users'],
         ]);
 
         $routes = $command->routes($json);
@@ -44,7 +44,7 @@ class GenerateWafRuleTest extends TestCase
 
         $json = json_encode([
             ['uri' => '/'],
-            ['uri' => '/_dusk/test'], // Should be ignored by default
+            ['uri' => '_dusk/test'], // Should be ignored by default
         ]);
 
         $routes = $command->routes($json);
