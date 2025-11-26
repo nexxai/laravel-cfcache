@@ -6,8 +6,7 @@
 
 # Laravel Cloudflare Cache
 
-This package is a WIP. It currently contains a command to generate the
-expression for a Cloudflare security rule for your Laravel application routes.
+This package is a WIP. It currently contains a command to generate the expression for a Cloudflare security rule for your Laravel application routes. This command was inspired by Jason McCreary's tweet: [https://x.com/gonedark/status/1978458884948775294](https://x.com/gonedark/status/1978458884948775294)
 
 ## Requirements
 
@@ -28,8 +27,6 @@ To publish the configuration file (only needed when using the `--sync` argument)
 php artisan vendor:publish --tag=cf-waf-rule-config
 ```
 
-## Documentation
-
 ### Basic Usage
 
 Generate the WAF rule expression:
@@ -44,8 +41,6 @@ Custom Rule -> Edit expression
 
 Please see the [Notes](#notes) section below for additional information and
 potential gotchas.
-
-This command was inspired by Jason McCreary's tweet: [https://x.com/gonedark/status/1978458884948775294](https://x.com/gonedark/status/1978458884948775294)
 
 ### Advanced Usage
 
@@ -149,8 +144,8 @@ included in production rules.
 
 If you use multiple subdomains (e.g., `example.com` and `sub.example.com`),
 you will need to add a separate rule for each subdomain, and prefix
-each with `http.host eq 'example.com' and ` or
-`http.host eq 'sub.example.com' and `
+each with `http.host eq "example.com" and ` or
+`http.host eq "sub.example.com" and `
 
 #### Certbot / .well-known
 
