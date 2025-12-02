@@ -5,6 +5,8 @@ namespace JTSmith\Cloudflare;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
+use JTSmith\Cloudflare\Commands\PurgeCache;
+use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 
 class PageCacheServiceProvider extends ServiceProvider implements DeferrableProvider
@@ -17,6 +19,7 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
         if ($this->app->runningInConsole()) {
             $this->commands([
                 GenerateWafRule::class,
+                PurgeCache::class,
             ]);
 
             // Publish configuration file
@@ -41,6 +44,11 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
         $this->app->singleton(WafRuleService::class, function ($app) {
             return new WafRuleService($app['config']->get('cfcache', []));
         });
+
+        // Register the cache purge service
+        $this->app->singleton(CachePurgeService::class, function ($app) {
+            return new CachePurgeService($app['config']->get('cfcache', []));
+        });
     }
 
     /**
@@ -49,7 +57,9 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
     public function provides(): array
     {
         return [
+            CachePurgeService::class,
             GenerateWafRule::class,
+            PurgeCache::class,
             WafRuleService::class,
         ];
     }
