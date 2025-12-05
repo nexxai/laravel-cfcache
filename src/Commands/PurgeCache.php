@@ -28,39 +28,24 @@ class PurgeCache extends Command
             return;
         }
 
-        $paths = $this->argument('paths');
-        $routes = $this->option('route');
+        $paths = collect($this->argument('paths'))
+            ->merge($this->resolveRoutes($this->option('route')))
+            ->map(fn ($path) => $this->processPaths($path))
+            ->unique()
+            ->values();
 
-        $allPaths = collect();
-
-        // Process route names
-        if (! empty($routes)) {
-            $routePaths = $this->resolveRoutes($routes);
-            $allPaths = $allPaths->merge($routePaths);
-        }
-
-        // Process provided paths
-        if (! empty($paths)) {
-            $allPaths = $allPaths->merge($paths);
-        }
-
-        // Convert all paths to full URLs
-        $allPaths = collect($this->processPaths($allPaths->toArray()));
-
-        $allPaths = $allPaths->unique()->values();
-
-        if ($allPaths->isEmpty()) {
+        if ($paths->isEmpty()) {
             $this->warn('You must specify a path or route to purge. Or purge everything with `--all`.');
 
             return;
-        } else {
-            $this->info('Purging specified paths from Cloudflare cache:');
-            foreach ($allPaths as $path) {
-                $this->line($path);
-            }
-            $this->newLine();
-            $this->purgePaths($allPaths->toArray());
         }
+
+        $this->info('Purging specified paths from Cloudflare cache:');
+        foreach ($paths as $path) {
+            $this->line($path);
+        }
+        $this->newLine();
+        $this->purgePaths($paths->all());
     }
 
     public function resolveRoutes(array $routeNames): array
@@ -90,22 +75,20 @@ class PurgeCache extends Command
         return array_unique($resolvedPaths);
     }
 
-    protected function processPaths(array $paths): array
+    protected function processPaths(string $path): string
     {
         $appUrl = config('app.url');
 
-        return collect($paths)->map(function ($path) use ($appUrl) {
-            // If it starts with http:// or https://, it's a full URL, leave as is
-            if (preg_match('/^https?:\/\//', $path)) {
-                return $path;
-            }
+        // If it starts with http:// or https://, it's a full URL, leave as is
+        if (preg_match('/^https?:\/\//', $path)) {
+            return $path;
+        }
 
-            // Otherwise, it's relative, prefix with app URL
-            $baseUrl = rtrim($appUrl, '/');
-            $cleanPath = ltrim($path, '/');
+        // Otherwise, it's relative, prefix with app URL
+        $baseUrl = rtrim($appUrl, '/');
+        $cleanPath = ltrim($path, '/');
 
-            return $baseUrl.'/'.$cleanPath;
-        })->toArray();
+        return $baseUrl.'/'.$cleanPath;
     }
 
     protected function purgeAll(): void
