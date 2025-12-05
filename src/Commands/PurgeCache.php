@@ -15,10 +15,19 @@ class PurgeCache extends Command
 
     protected $signature = 'cloudflare:purge
                             {paths?* : Paths to purge (relative or full URLs). If omitted, purges all cache}
-                            {--route=* : Route names to resolve and purge}';
+                            {--route=* : Route names to resolve and purge}
+                            {--all : Purge all cached content from Cloudflare}';
 
     public function handle(): void
     {
+        if ($this->option('all')) {
+            if ($this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
+                $this->purgeAll();
+            }
+
+            return;
+        }
+
         $paths = $this->argument('paths');
         $routes = $this->option('route');
 
@@ -41,8 +50,9 @@ class PurgeCache extends Command
         $allPaths = $allPaths->unique()->values();
 
         if ($allPaths->isEmpty()) {
-            $this->info('Purging all cached content from Cloudflare...');
-            $this->purgeAll();
+            $this->warn('You must specify a path or route to purge. Or purge everything with `--all`.');
+
+            return;
         } else {
             $this->info('Purging specified paths from Cloudflare cache:');
             foreach ($allPaths as $path) {
