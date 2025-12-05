@@ -176,7 +176,7 @@ This package also provides commands to purge Cloudflare's cache for specific pat
 Purge all cached content from Cloudflare:
 
 ```sh
-php artisan cloudflare:purge-cache --all
+php artisan cloudflare:purge --all
 ```
 
 ### Purge Specific Paths
