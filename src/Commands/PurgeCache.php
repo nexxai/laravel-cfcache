@@ -15,42 +15,37 @@ class PurgeCache extends Command
 
     protected $signature = 'cloudflare:purge
                             {paths?* : Paths to purge (relative or full URLs). If omitted, purges all cache}
-                            {--route=* : Route names to resolve and purge}';
+                            {--route=* : Route names to resolve and purge}
+                            {--all : Purge all cached content from Cloudflare}';
 
     public function handle(): void
     {
-        $paths = $this->argument('paths');
-        $routes = $this->option('route');
-
-        $allPaths = collect();
-
-        // Process route names
-        if (! empty($routes)) {
-            $routePaths = $this->resolveRoutes($routes);
-            $allPaths = $allPaths->merge($routePaths);
-        }
-
-        // Process provided paths
-        if (! empty($paths)) {
-            $allPaths = $allPaths->merge($paths);
-        }
-
-        // Convert all paths to full URLs
-        $allPaths = collect($this->processPaths($allPaths->toArray()));
-
-        $allPaths = $allPaths->unique()->values();
-
-        if ($allPaths->isEmpty()) {
-            $this->info('Purging all cached content from Cloudflare...');
-            $this->purgeAll();
-        } else {
-            $this->info('Purging specified paths from Cloudflare cache:');
-            foreach ($allPaths as $path) {
-                $this->line($path);
+        if ($this->option('all')) {
+            if ($this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
+                $this->purgeAll();
             }
-            $this->newLine();
-            $this->purgePaths($allPaths->toArray());
+
+            return;
         }
+
+        $paths = collect($this->argument('paths'))
+            ->merge($this->resolveRoutes($this->option('route')))
+            ->map(fn ($path) => $this->processPaths($path))
+            ->unique()
+            ->values();
+
+        if ($paths->isEmpty()) {
+            $this->warn('You must specify at least one path or route to purge. Or purge everything with `--all`.');
+
+            return;
+        }
+
+        $this->info('Purging specified paths from Cloudflare cache:');
+        foreach ($paths as $path) {
+            $this->line($path);
+        }
+        $this->newLine();
+        $this->purgePaths($paths->all());
     }
 
     public function resolveRoutes(array $routeNames): array
@@ -80,26 +75,26 @@ class PurgeCache extends Command
         return array_unique($resolvedPaths);
     }
 
-    protected function processPaths(array $paths): array
+    protected function processPaths(string $path): string
     {
         $appUrl = config('app.url');
 
-        return collect($paths)->map(function ($path) use ($appUrl) {
-            // If it starts with http:// or https://, it's a full URL, leave as is
-            if (preg_match('/^https?:\/\//', $path)) {
-                return $path;
-            }
+        // If it starts with http:// or https://, it's a full URL, leave as is
+        if (preg_match('/^https?:\/\//', $path)) {
+            return $path;
+        }
 
-            // Otherwise, it's relative, prefix with app URL
-            $baseUrl = rtrim($appUrl, '/');
-            $cleanPath = ltrim($path, '/');
+        // Otherwise, it's relative, prefix with app URL
+        $baseUrl = rtrim($appUrl, '/');
+        $cleanPath = ltrim($path, '/');
 
-            return $baseUrl.'/'.$cleanPath;
-        })->toArray();
+        return $baseUrl.'/'.$cleanPath;
     }
 
     protected function purgeAll(): void
     {
+        $this->info('Purging all cached content from Cloudflare...');
+
         try {
             $service = app(CachePurgeService::class);
             $result = $service->purgeCache();

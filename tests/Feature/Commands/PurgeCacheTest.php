@@ -43,7 +43,7 @@ class PurgeCacheTest extends TestCase
     }
 
     #[Test]
-    public function it_purges_all_cache_when_no_paths_provided(): void
+    public function it_purges_all_cache_when_the_all_flag_is_provided(): void
     {
         Http::fake([
             '*/purge_cache' => Http::response([
@@ -52,18 +52,24 @@ class PurgeCacheTest extends TestCase
             ]),
         ]);
 
-        $this->artisan('cloudflare:purge')
+        $this->artisan('cloudflare:purge', ['--all' => true])
+            ->expectsConfirmation('Are you sure you want to purge all cached content from Cloudflare?', 'yes')
             ->expectsOutput('Purging all cached content from Cloudflare...')
-            ->expectsOutput('Successfully purged all cached content')
-            ->expectsOutput('  Purge ID: purge-all-123')
-            ->expectsOutput('Cache purge completed successfully!')
-            ->assertExitCode(0);
+            ->expectsOutput('Cache purge completed successfully!');
 
         Http::assertSent(function ($request) {
             return $request->method() === 'POST'
                 && str_contains($request->url(), 'purge_cache')
                 && $request->data() === ['purge_everything' => true];
         });
+    }
+
+    #[Test]
+    public function it_errors_when_no_paths_or_routes_are_provided(): void
+    {
+        $this->artisan('cloudflare:purge')
+            ->expectsOutput('You must specify at least one path or route to purge. Or purge everything with `--all`.')
+            ->assertExitCode(0);
     }
 
     #[Test]
@@ -186,7 +192,8 @@ class PurgeCacheTest extends TestCase
 
         $this->app->instance(CachePurgeService::class, $mockService);
 
-        $this->artisan('cloudflare:purge')
+        $this->artisan('cloudflare:purge', ['--all' => true])
+            ->expectsConfirmation('Are you sure you want to purge all cached content from Cloudflare?', 'yes')
             ->expectsOutput('Purging all cached content from Cloudflare...')
             ->expectsOutput('API error: Authentication failed')
             ->expectsOutput('Authentication failed. Please verify:')

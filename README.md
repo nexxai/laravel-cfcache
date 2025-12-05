@@ -51,7 +51,7 @@ Purge all cached content or specific paths/routes:
 
 ```sh
 # Purge all cache
-php artisan cloudflare:purge
+php artisan cloudflare:purge --all
 
 # Purge specific paths (absolute or relative, separated by spaces, wildcards supported)
 php artisan cloudflare:purge / /about https://example.com/faq https://example.com/our-team/*
@@ -81,16 +81,22 @@ CFCACHE_ZONE_ID=your-zone-id-here
     - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
     - Click "Create Token"
     - Use the "Custom token" template
-    - Grant the following permissions (choose based on features you need):
-        - Zone -> Firewall Services -> Edit (for WAF rule management)
-        - Zone -> Cache Purge -> Edit (for cache purging)
-    - Include your specific zone in the Zone Resources
+    - Name the token "CFCache package token"
+    - Based on the features you need, grant the following permissions:
+        - **WAF rules**: Zone -> Firewall Services -> Edit
+        - **Cache purging**: Zone -> Cache Purge -> Purge
+    - Include your specific zone(s) in the Zone Resources
     - Create the token and copy it to your `.env` file as `CFCACHE_API_TOKEN`
 
 2. **Zone ID**:
     - Go to your domain's overview page in Cloudflare
     - Find the Zone ID in the right sidebar under "API"
     - Copy it to your `.env` file as `CFCACHE_ZONE_ID`
+
+> [!NOTE]  
+> You may create a single token that applies to multiple zones, but ensure that you
+> use the correct zone ID as the `CFCACHE_ZONE_ID` in each respective app's
+> `.env` file.
 
 #### Sync to Cloudflare API
 
@@ -170,7 +176,7 @@ This package also provides commands to purge Cloudflare's cache for specific pat
 Purge all cached content from Cloudflare:
 
 ```sh
-php artisan cloudflare:purge-cache
+php artisan cloudflare:purge --all
 ```
 
 ### Purge Specific Paths
