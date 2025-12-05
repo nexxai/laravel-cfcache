@@ -203,4 +203,22 @@ class PurgeCacheTest extends TestCase
             ->expectsOutput('HTTP Status: 401')
             ->assertExitCode(0);
     }
+
+    #[Test]
+    public function it_fails_when_api_token_is_not_set(): void
+    {
+        Config::set('cfcache.api.token', null);
+
+        $this->artisan('cloudflare:purge', ['--all' => true])
+            ->assertFailed();
+    }
+
+    #[Test]
+    public function it_fails_when_zone_id_is_not_set(): void
+    {
+        Config::set('cfcache.api.zone_id', null);
+
+        $this->artisan('cloudflare:purge', ['--all' => true])
+            ->assertFailed();
+    }
 }

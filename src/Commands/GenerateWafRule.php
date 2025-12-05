@@ -8,12 +8,16 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Actions\WafRule;
+use JTSmith\Cloudflare\Concerns\ValidatesConfig;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
+use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
 use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 
 class GenerateWafRule extends Command
 {
+    use ValidatesConfig;
+
     protected $description = 'Generate a Cloudflare security rule for the endpoints available in your application';
 
     protected $signature = 'cloudflare:waf-rule
@@ -21,6 +25,14 @@ class GenerateWafRule extends Command
 
     public function handle(): void
     {
+        if ($this->option('sync')) {
+            try {
+                $this->validateRequiredConfig(['cfcache.api.token', 'cfcache.api.zone_id']);
+            } catch (ConfigValidationException $e) {
+                $this->fail($e->getMessage());
+            }
+        }
+
         Artisan::call('route:list', ['--json' => true]);
         $json = Artisan::output();
 
