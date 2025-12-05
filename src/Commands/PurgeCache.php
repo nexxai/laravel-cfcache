@@ -35,7 +35,7 @@ class PurgeCache extends Command
             ->values();
 
         if ($paths->isEmpty()) {
-            $this->warn('You must specify a path or route to purge. Or purge everything with `--all`.');
+            $this->warn('You must specify at least one path or route to purge. Or purge everything with `--all`.');
 
             return;
         }
@@ -93,6 +93,8 @@ class PurgeCache extends Command
 
     protected function purgeAll(): void
     {
+        $this->info('Purging all cached content from Cloudflare...');
+
         try {
             $service = app(CachePurgeService::class);
             $result = $service->purgeCache();
