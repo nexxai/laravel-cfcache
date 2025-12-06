@@ -37,10 +37,11 @@ To publish the configuration file (needed for WAF rule syncing):
 php artisan vendor:publish --tag=cfcache-config
 ```
 
-> [!REMINDER]
+> [!TIP]
 > When updating to a new v0.x (pre-v1.0) version, you will need to manually
 > update your `composer.json` file to include the new version number before
-> running `composer update`
+> running `composer update` This is a composer feature; once a v1.0 is
+> tagged, this will no longer be necessary.
 
 ### Basic Usage
 
