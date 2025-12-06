@@ -2,22 +2,18 @@
 
 namespace JTSmith\Cloudflare\Commands;
 
-use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Actions\WafRule;
-use JTSmith\Cloudflare\Concerns\ValidatesConfig;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
 use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
 use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
 
-class GenerateWafRule extends Command
+class GenerateWafRule extends BaseCommand
 {
-    use ValidatesConfig;
-
     protected $description = 'Generate a Cloudflare security rule for the endpoints available in your application';
 
     protected $signature = 'cloudflare:waf-rule
