@@ -2,14 +2,14 @@
 
 namespace JTSmith\Cloudflare\Commands;
 
-use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
+use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 
-class PurgeCache extends Command
+class PurgeCache extends BaseCommand
 {
     protected $description = 'Purge Cloudflare cache for specified paths or all content';
 
@@ -20,6 +20,12 @@ class PurgeCache extends Command
 
     public function handle(): void
     {
+        try {
+            $this->validateRequiredConfig(['cfcache.api.token', 'cfcache.api.zone_id']);
+        } catch (ConfigValidationException $e) {
+            $this->fail($e->getMessage());
+        }
+
         if ($this->option('all')) {
             if ($this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
                 $this->purgeAll();

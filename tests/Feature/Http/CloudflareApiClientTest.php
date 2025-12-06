@@ -17,6 +17,8 @@ class CloudflareApiClientTest extends TestCase
     {
         parent::setUp();
 
+        Http::preventStrayRequests();
+
         $this->client = new CloudflareApiClient(
             'test-token-1234567890',
             'test-zone-id',
@@ -24,7 +26,7 @@ class CloudflareApiClientTest extends TestCase
                 'base_url' => 'https://api.cloudflare.com/client/v4',
                 'timeout' => 30,
                 'retry_attempts' => 3,
-                'retry_delay' => 1000,
+                'retry_delay' => 0,
             ]
         );
     }

@@ -28,7 +28,7 @@ class WafRuleServiceTest extends TestCase
                     'base_url' => 'https://api.cloudflare.com/client/v4',
                     'timeout' => 30,
                     'retry_attempts' => 3,
-                    'retry_delay' => 1000,
+                    'retry_delay' => 0,
                 ],
             ],
             'features' => [

@@ -9,6 +9,28 @@ use Tests\TestCase;
 
 class GenerateWafRuleTest extends TestCase
 {
+    protected array $validConfig;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->validConfig = [
+            'api' => [
+                'token' => 'test-token-1234567890abcdefghijklmnopqrstuvw',
+                'zone_id' => 'a1b2c3d4e5f678901234567890123456',
+                'settings' => [
+                    'base_url' => 'https://api.cloudflare.com/client/v4',
+                    'timeout' => 30,
+                    'retry_attempts' => 3,
+                    'retry_delay' => 1000,
+                ],
+            ],
+        ];
+
+        Config::set('cfcache', $this->validConfig);
+    }
+
     #[Test]
     public function it_filters_out_ignorable_paths(): void
     {
@@ -52,5 +74,23 @@ class GenerateWafRuleTest extends TestCase
         // Should contain normal routes but not the default ignorable
         $this->assertContains('/', $routes);
         $this->assertNotContains('/_dusk/test', $routes);
+    }
+
+    #[Test]
+    public function it_fails_when_syncing_and_api_token_is_not_set(): void
+    {
+        Config::set('cfcache.api.token', null);
+
+        $this->artisan('cloudflare:waf-rule', ['--sync' => true])
+            ->assertFailed();
+    }
+
+    #[Test]
+    public function it_fails_when_syncing_and_zone_id_is_not_set(): void
+    {
+        Config::set('cfcache.api.zone_id', null);
+
+        $this->artisan('cloudflare:waf-rule', ['--sync' => true])
+            ->assertFailed();
     }
 }
