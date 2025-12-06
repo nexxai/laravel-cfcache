@@ -5,7 +5,10 @@
     "keywords": [
         "laravel",
         "cloudflare",
-        "cache"
+        "cache",
+        "cf",
+        "waf",
+        "cdn"
     ],
     "license": "MIT",
     "require": {
@@ -64,7 +67,7 @@
         ],
         "test": [
             "@clear",
-            "@php vendor/bin/phpunit"
+            "@php vendor/bin/pest"
         ]
     }
 }
