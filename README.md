@@ -12,12 +12,18 @@ purging cached content.
 
 The WAF rule generation was inspired by Jason McCreary's tweet: [https://x.com/gonedark/status/1978458884948775294](https://x.com/gonedark/status/1978458884948775294)
 
+> [!WARNING]
+> This package is still in development and so APIs and features may change
+> without notice. Please be extremely careful if you use this package in
+> production. The tagging of v1.0 will be the indication that the package is
+> stable and ready for general production use.
+
 ## Requirements
 
 A Laravel application running Laravel 12 or higher. _Not running a stable
 version of Laravel?_ [Upgrade with Shift](https://laravelshift.com).
 
-## Installation
+## Installation / Updating
 
 You can install this package by running the following command:
 
@@ -30,6 +36,11 @@ To publish the configuration file (needed for WAF rule syncing):
 ```sh
 php artisan vendor:publish --tag=cfcache-config
 ```
+
+> [!REMINDER]
+> When updating to a new v0.x (pre-v1.0) version, you will need to manually
+> update your `composer.json` file to include the new version number before
+> running `composer update`
 
 ### Basic Usage
 
