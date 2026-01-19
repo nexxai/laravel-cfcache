@@ -2,12 +2,10 @@
 
 namespace JTSmith\Cloudflare\Commands;
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
 use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
-use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
+use JTSmith\Cloudflare\Facades\Purge;
 
 class PurgeCache extends BaseCommand
 {
@@ -28,15 +26,15 @@ class PurgeCache extends BaseCommand
 
         if ($this->option('all')) {
             if ($this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
-                $this->purgeAll();
+                $this->purgeEverything();
             }
 
             return;
         }
 
         $paths = collect($this->argument('paths'))
-            ->merge($this->resolveRoutes($this->option('route')))
-            ->map(fn ($path) => $this->processPaths($path))
+            ->merge(Purge::resolveRoutes($this->option('route')))
+            ->map(fn ($path) => Purge::normalizeUrl($path))
             ->unique()
             ->values();
 
@@ -51,59 +49,16 @@ class PurgeCache extends BaseCommand
             $this->line($path);
         }
         $this->newLine();
+
         $this->purgePaths($paths->all());
     }
 
-    public function resolveRoutes(array $routeNames): array
-    {
-        $resolvedPaths = [];
-
-        foreach ($routeNames as $routeName) {
-            $route = Route::getRoutes()->getByName($routeName);
-
-            if (! $route) {
-                // Skip unknown routes silently for now
-                continue;
-            }
-
-            $uri = $route->uri();
-
-            // Replace parameter placeholders like {id} with * for Cloudflare syntax
-            $cleanUri = preg_replace('/\{[^}]+\}/', '*', $uri);
-            $cleanUri = preg_replace('/\/\/+/', '/', $cleanUri); // Remove double slashes
-
-            // Ensure it starts with /
-            $path = Str::startsWith($cleanUri, '/') ? $cleanUri : '/'.$cleanUri;
-
-            $resolvedPaths[] = $path;
-        }
-
-        return array_unique($resolvedPaths);
-    }
-
-    protected function processPaths(string $path): string
-    {
-        $appUrl = config('app.url');
-
-        // If it starts with http:// or https://, it's a full URL, leave as is
-        if (preg_match('/^https?:\/\//', $path)) {
-            return $path;
-        }
-
-        // Otherwise, it's relative, prefix with app URL
-        $baseUrl = rtrim($appUrl, '/');
-        $cleanPath = ltrim($path, '/');
-
-        return $baseUrl.'/'.$cleanPath;
-    }
-
-    protected function purgeAll(): void
+    protected function purgeEverything(): void
     {
         $this->info('Purging all cached content from Cloudflare...');
 
         try {
-            $service = app(CachePurgeService::class);
-            $result = $service->purgeCache();
+            $result = Purge::everything();
 
             $this->info($result->message);
             $this->line("  Purge ID: {$result->id}");
@@ -112,17 +67,14 @@ class PurgeCache extends BaseCommand
         } catch (CloudflareApiException $e) {
             $this->handleApiException($e);
         } catch (CloudflareException $e) {
-            $this->error('Failed to purge cache: '.$e->getMessage());
-            $this->newLine();
-            $this->warn('An unexpected error occurred. Please check your configuration and try again.');
+            $this->handleException($e);
         }
     }
 
     protected function purgePaths(array $paths): void
     {
         try {
-            $service = app(CachePurgeService::class);
-            $result = $service->purgeCache($paths);
+            $result = Purge::url($paths);
 
             $this->info($result->message);
             $this->line("  Purge ID: {$result->id}");
@@ -132,10 +84,15 @@ class PurgeCache extends BaseCommand
         } catch (CloudflareApiException $e) {
             $this->handleApiException($e);
         } catch (CloudflareException $e) {
-            $this->error('Failed to purge cache: '.$e->getMessage());
-            $this->newLine();
-            $this->warn('An unexpected error occurred. Please check your configuration and try again.');
+            $this->handleException($e);
         }
+    }
+
+    protected function handleException(\Exception $e): void
+    {
+        $this->error('Failed to purge cache: '.$e->getMessage());
+        $this->newLine();
+        $this->warn('An unexpected error occurred. Please check your configuration and try again.');
     }
 
     protected function handleApiException(CloudflareApiException $e): void

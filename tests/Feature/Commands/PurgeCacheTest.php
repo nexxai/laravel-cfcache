@@ -103,34 +103,6 @@ class PurgeCacheTest extends TestCase
     }
 
     #[Test]
-    public function it_resolves_routes_to_paths(): void
-    {
-        $command = new \JTSmith\Cloudflare\Commands\PurgeCache;
-
-        // Mock Route::getRoutes()
-        $mockRouteCollection = Mockery::mock();
-        $mockRouteCollection->shouldReceive('getByName')
-            ->with('home')
-            ->andReturn(Mockery::mock()->shouldReceive('uri')->andReturn('/')->getMock());
-        $mockRouteCollection->shouldReceive('getByName')
-            ->with('about')
-            ->andReturn(Mockery::mock()->shouldReceive('uri')->andReturn('about')->getMock());
-        $mockRouteCollection->shouldReceive('getByName')
-            ->with('users.show')
-            ->andReturn(Mockery::mock()->shouldReceive('uri')->andReturn('users/{id}')->getMock());
-        $mockRouteCollection->shouldReceive('getByName')
-            ->with('unknown')
-            ->andReturn(null);
-
-        Route::shouldReceive('getRoutes')
-            ->andReturn($mockRouteCollection);
-
-        $resolved = $command->resolveRoutes(['home', 'about', 'users.show', 'unknown']);
-
-        $this->assertEquals(['/', '/about', '/users/*'], $resolved);
-    }
-
-    #[Test]
     public function it_processes_routes_in_command(): void
     {
         // Mock Route::getRoutes()
