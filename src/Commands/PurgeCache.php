@@ -32,11 +32,17 @@ class PurgeCache extends BaseCommand
             return;
         }
 
-        $paths = collect($this->argument('paths'))
-            ->merge(Purge::resolveRoutes($this->option('route')))
-            ->map(fn ($path) => Purge::normalizeUrl($path))
-            ->unique()
-            ->values();
+        try {
+            $paths = collect($this->argument('paths'))
+                ->merge(Purge::resolveRoutes($this->option('route')))
+                ->map(fn ($path) => Purge::normalizeUrl($path))
+                ->unique()
+                ->values();
+        } catch (\JTSmith\Cloudflare\Exceptions\RouteNotFoundException $e) {
+            $this->error($e->getMessage());
+
+            return;
+        }
 
         if ($paths->isEmpty()) {
             $this->warn('You must specify at least one path or route to purge. Or purge everything with `--all`.');

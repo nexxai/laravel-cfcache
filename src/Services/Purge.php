@@ -73,13 +73,13 @@ class Purge
             $route = Route::getRoutes()->getByName($routeName);
 
             if (! $route) {
-                // Skip unknown routes silently for now
-                continue;
+                throw new \JTSmith\Cloudflare\Exceptions\RouteNotFoundException("Route [{$routeName}] not found.");
             }
 
             $uri = $route->uri();
 
             // Replace parameter placeholders like {id} with * for Cloudflare syntax
+            // This is a heuristic: we assume Cloudflare wildcards align with our parameter replacement
             $cleanUri = preg_replace('/\{[^}]+\}/', '*', $uri);
             $cleanUri = preg_replace('/\/\/+/', '/', $cleanUri); // Remove double slashes
 

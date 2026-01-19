@@ -1,8 +1,11 @@
 <?php
 
+namespace Tests\Feature;
+
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use JTSmith\Cloudflare\DTOs\CachePurgeResult;
+use JTSmith\Cloudflare\Exceptions\RouteNotFoundException;
 use JTSmith\Cloudflare\Facades\Purge;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 
@@ -23,7 +26,7 @@ it('can purge specific urls via facade', function () {
 it('can resolve routes to urls', function () {
     Config::set('app.url', 'https://example.com');
     Route::get('/users/{id}', fn () => 'users')->name('users.show');
-    Route::getRoutes()->refreshNameLookups(); // Try this?
+    Route::getRoutes()->refreshNameLookups();
 
     $mockService = $this->mock(CachePurgeService::class);
     $mockService->shouldReceive('purgeCache')
@@ -33,6 +36,11 @@ it('can resolve routes to urls', function () {
 
     Purge::route('users.show');
 });
+
+it('throws exception when route not found', function () {
+    $this->mock(CachePurgeService::class);
+    Purge::route('missing.route');
+})->throws(RouteNotFoundException::class, 'Route [missing.route] not found.');
 
 it('handles everything purge', function () {
     $mockService = $this->mock(CachePurgeService::class);

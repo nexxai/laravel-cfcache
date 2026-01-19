@@ -103,6 +103,14 @@ class PurgeCacheTest extends TestCase
     }
 
     #[Test]
+    public function it_errors_when_route_is_not_found(): void
+    {
+        $this->artisan('cloudflare:purge', ['--route' => ['missing.route']])
+            ->expectsOutput('Route [missing.route] not found.')
+            ->assertExitCode(0);
+    }
+
+    #[Test]
     public function it_processes_routes_in_command(): void
     {
         // Mock Route::getRoutes()
