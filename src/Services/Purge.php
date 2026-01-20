@@ -5,6 +5,7 @@ namespace JTSmith\Cloudflare\Services;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use JTSmith\Cloudflare\DTOs\CachePurgeResult;
+use JTSmith\Cloudflare\Exceptions\RouteNotFoundException;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 
 class Purge
@@ -51,20 +52,33 @@ class Purge
 
     public function normalizeUrl(string $path): string
     {
-        $appUrl = config('app.url');
-
-        // If it starts with http:// or https://, it's a full URL, leave as is
-        if (preg_match('/^https?:\/\//', $path)) {
+        if ($this->isFullUrl($path)) {
             return $path;
         }
 
-        // Otherwise, it's relative, prefix with app URL
+        return $this->isRelativeUrl($path);
+    }
+
+    private function isFullUrl(string $path): bool
+    {
+        return Str::startsWith($path, ['http://', 'https://']);
+    }
+
+    private function isRelativeUrl(string $path): string
+    {
+        $appUrl = config('app.url');
+
         $baseUrl = rtrim($appUrl, '/');
         $cleanPath = ltrim($path, '/');
 
         return $baseUrl.'/'.$cleanPath;
     }
 
+    /**
+     * Resolve route names to URLs.
+     *
+     * @param  array<string>  $routeNames
+     */
     public function resolveRoutes(array $routeNames): array
     {
         $resolvedPaths = [];
@@ -73,7 +87,7 @@ class Purge
             $route = Route::getRoutes()->getByName($routeName);
 
             if (! $route) {
-                throw new \JTSmith\Cloudflare\Exceptions\RouteNotFoundException("Route [{$routeName}] not found.");
+                throw new RouteNotFoundException("Route [{$routeName}] not found.");
             }
 
             $uri = $route->uri();
@@ -83,7 +97,6 @@ class Purge
             $cleanUri = preg_replace('/\{[^}]+\}/', '*', $uri);
             $cleanUri = preg_replace('/\/\/+/', '/', $cleanUri); // Remove double slashes
 
-            // Ensure it starts with /
             $path = Str::startsWith($cleanUri, '/') ? $cleanUri : '/'.$cleanUri;
 
             $resolvedPaths[] = $path;
