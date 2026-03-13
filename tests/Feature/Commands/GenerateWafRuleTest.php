@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Commands;
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Config;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
 
 class GenerateWafRuleTest extends TestCase
@@ -92,5 +94,29 @@ class GenerateWafRuleTest extends TestCase
 
         $this->artisan('cloudflare:waf-rule', ['--sync' => true])
             ->assertFailed();
+    }
+
+    #[Test]
+    public function it_includes_hostname_condition_in_rule_when_hostnames_configured(): void
+    {
+        Config::set('cfcache.features.waf.hostnames', ['app.example.com', 'www.example.com']);
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('(http.host in {"app.example.com" "www.example.com"}) and (', $output->fetch());
+    }
+
+    #[Test]
+    public function it_omits_hostname_condition_when_hostnames_empty(): void
+    {
+        Config::set('cfcache.features.waf.hostnames', []);
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringNotContainsString('http.host in {', $output->fetch());
     }
 }
