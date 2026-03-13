@@ -146,8 +146,8 @@ return [
 
             'rule_action' => env('CFCACHE_RULE_ACTION', 'block'),
 
-            'hostnames' => env('CFCACHE_WAF_HOSTNAMES')
-                ? array_filter(array_map('trim', explode(',', env('CFCACHE_WAF_HOSTNAMES'))))
+            'hostnames' => env('CFCACHE_RULE_HOSTNAMES')
+                ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES'))))
                 : [],
 
             'ignorable_paths' => ['/_dusk/*'],
