@@ -148,6 +148,22 @@ return [
 
             /*
             |--------------------------------------------------------------------------
+            | Hostnames
+            |--------------------------------------------------------------------------
+            |
+            | When non-empty, the generated WAF rule only applies when the request
+            | hostname matches one of these values (compared against the Host header).
+            | When empty, the rule applies to all hostnames (current behavior).
+            | Set as an array here, or use CFCACHE_RULE_HOSTNAMES (comma-separated) in .env.
+            |
+            */
+
+            'hostnames' => env('CFCACHE_RULE_HOSTNAMES')
+                ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES'))))
+                : [],
+
+            /*
+            |--------------------------------------------------------------------------
             | Ignorable Paths
             |--------------------------------------------------------------------------
             |

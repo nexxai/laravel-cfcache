@@ -128,6 +128,7 @@ return [
             'rule_identifier' => env('CFCACHE_RULE_ID', 'laravel-waf-rule'),
             'rule_description' => env('CFCACHE_RULE_DESCRIPTION', 'Valid Laravel Routes'),
             'rule_action' => env('CFCACHE_RULE_ACTION', 'block'),
+            'hostnames' => env('CFCACHE_RULE_HOSTNAMES') ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES')))) : [],
             'ignorable_paths' => ['/_dusk/*'],
             'forced_allowed_paths' => [],
         ],
@@ -183,6 +184,24 @@ included in the allowlist:
 
 Wildcards are supported (e.g. `/cdn-cgi/zaraz/*`). Paths are normalized with a
 leading slash if omitted.
+
+#### Hostnames
+
+When using multiple hostnames or subdomains in the same zone, you can restrict
+the generated WAF rule so it only applies to specific hosts. If `hostnames` is
+empty (default), the rule applies to all hostnames.
+
+Set hostnames in config or via `.env`:
+
+```php
+// config/cfcache.php — rule applies only when Host matches one of these
+'hostnames' => ['app.example.com', 'www.example.com'],
+```
+
+```env
+# .env — comma-separated
+CFCACHE_RULE_HOSTNAMES=app.example.com,www.example.com
+```
 
 ## Cache Purging
 
@@ -251,11 +270,11 @@ You can create a token with both WAF and Cache Purge permissions if you plan to 
 
 #### Multiple subdomains
 
-If you use multiple subdomains (e.g., `example.com` and `sub.example.com`),
-you will need to add a separate rule for each subdomain, and prefix
-each with `http.host eq "example.com" and ` or
-`http.host eq "sub.example.com" and `
-when generating WAF rules.
+If you use multiple subdomains (e.g., `example.com` and `sub.example.com`) in the
+same zone, set the `hostnames` option in `config/cfcache.php` (see
+[Hostnames](#hostnames)) so the generated WAF rule only
+applies to the hostnames you specify. Otherwise the rule would apply to every
+hostname on the zone.
 
 #### Certbot / .well-known
 

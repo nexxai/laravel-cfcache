@@ -35,6 +35,12 @@ class GenerateWafRule extends BaseCommand
         $routes = $this->routes($json);
         $rule = $this->generateRule($routes);
 
+        $hostnames = config('cfcache.features.waf.hostnames', []);
+        if (is_array($hostnames) && $hostnames !== []) {
+            $list = implode(' ', array_map(fn (string $h) => '"'.str_replace('"', '\\"', $h).'"', $hostnames));
+            $rule = '(http.host in {'.$list.'}) and ('.$rule.')';
+        }
+
         $this->info('Generated Cloudflare WAF rule:');
         $this->line($rule);
 
