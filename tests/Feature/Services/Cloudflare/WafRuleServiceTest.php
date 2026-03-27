@@ -352,6 +352,88 @@ class WafRuleServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_fetches_current_paths_from_an_existing_rule(): void
+    {
+        $mockClient = Mockery::mock(WafApiClient::class);
+
+        $mockClient->shouldReceive('getFirewallRules')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => 'existing-rule-123',
+                    'description' => 'Test WAF Rule [id:test-rule]',
+                    'filter' => ['id' => 'existing-filter-123'],
+                ],
+            ]);
+
+        $mockClient->shouldReceive('getFirewallRule')
+            ->once()
+            ->with('existing-rule-123')
+            ->andReturn([
+                'id' => 'existing-rule-123',
+                'filter' => [
+                    'id' => 'existing-filter-123',
+                    'expression' => 'not (http.request.uri.path in {"/about" "/contact"} or http.request.uri.path wildcard "/blog/*")',
+                ],
+            ]);
+
+        $service = new WafRuleService($this->validConfig, $mockClient);
+        $paths = $service->fetchCurrentPaths();
+
+        $this->assertCount(3, $paths);
+        $this->assertContains('/about', $paths);
+        $this->assertContains('/contact', $paths);
+        $this->assertContains('/blog/*', $paths);
+    }
+
+    #[Test]
+    public function it_returns_empty_collection_when_no_existing_rule_is_found(): void
+    {
+        $mockClient = Mockery::mock(WafApiClient::class);
+
+        $mockClient->shouldReceive('getFirewallRules')
+            ->once()
+            ->andReturn([]);
+
+        $service = new WafRuleService($this->validConfig, $mockClient);
+        $paths = $service->fetchCurrentPaths();
+
+        $this->assertTrue($paths->isEmpty());
+    }
+
+    #[Test]
+    public function it_returns_empty_collection_when_existing_rule_has_no_expression(): void
+    {
+        $mockClient = Mockery::mock(WafApiClient::class);
+
+        $mockClient->shouldReceive('getFirewallRules')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => 'existing-rule-123',
+                    'description' => 'Test WAF Rule [id:test-rule]',
+                    'filter' => ['id' => 'existing-filter-123'],
+                ],
+            ]);
+
+        $mockClient->shouldReceive('getFirewallRule')
+            ->once()
+            ->with('existing-rule-123')
+            ->andReturn([
+                'id' => 'existing-rule-123',
+                'filter' => [
+                    'id' => 'existing-filter-123',
+                    'expression' => '',
+                ],
+            ]);
+
+        $service = new WafRuleService($this->validConfig, $mockClient);
+        $paths = $service->fetchCurrentPaths();
+
+        $this->assertTrue($paths->isEmpty());
+    }
+
+    #[Test]
     public function it_contains_endpoint_and_method_information(): void
     {
         Http::fake([
