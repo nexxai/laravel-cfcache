@@ -2,6 +2,8 @@
 
 namespace JTSmith\Cloudflare\Services\Cloudflare;
 
+use Illuminate\Support\Collection;
+use JTSmith\Cloudflare\Actions\WafRule;
 use JTSmith\Cloudflare\DTOs\WafRuleResult;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Http\Clients\WafApiClient;
@@ -30,6 +32,35 @@ class WafRuleService extends CloudflareService
             $this->getZoneId(),
             $this->getHttpOptions()
         );
+    }
+
+    /**
+     * Fetch the paths from the currently deployed WAF rule expression.
+     *
+     * Returns an empty collection when no rule exists or the rule has no expression.
+     * Useful for --patch mode: callers can merge these paths with freshly generated
+     * ones to produce an additive update rather than a full replacement.
+     *
+     * @return Collection<int, string>
+     *
+     * @throws CloudflareApiException If the API request fails
+     */
+    public function fetchCurrentPaths(): Collection
+    {
+        $existingRule = $this->findExistingRule();
+
+        if (! $existingRule) {
+            return collect();
+        }
+
+        $rule = $this->apiClient->getFirewallRule($existingRule['id']);
+        $expression = data_get($rule, 'filter.expression', '');
+
+        if (empty($expression)) {
+            return collect();
+        }
+
+        return (new WafRule)->parseExpression($expression);
     }
 
     /**

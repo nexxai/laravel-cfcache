@@ -17,11 +17,17 @@ class GenerateWafRule extends BaseCommand
     protected $description = 'Generate a Cloudflare security rule for the endpoints available in your application';
 
     protected $signature = 'cloudflare:waf-rule
-                            {--sync : Sync the generated rule to Cloudflare via API}';
+                            {--sync : Sync the generated rule to Cloudflare via API}
+                            {--patch : Fetch the existing Cloudflare rule and add only missing paths, preserving all existing ones}
+                            {--check : Compare generated paths against the live Cloudflare rule and report any missing paths}';
 
     public function handle(): void
     {
-        if ($this->option('sync')) {
+        if ($this->option('patch') && $this->option('check')) {
+            $this->warn('--patch and --check cannot be used together. Running --check only.');
+        }
+
+        if ($this->option('sync') || $this->option('patch') || $this->option('check')) {
             try {
                 $this->validateRequiredConfig(['cfcache.api.token', 'cfcache.api.zone_id']);
             } catch (ConfigValidationException $e) {
@@ -33,6 +39,17 @@ class GenerateWafRule extends BaseCommand
         $json = Artisan::output();
 
         $routes = $this->routes($json);
+
+        if ($this->option('check')) {
+            $this->runCheck($routes);
+
+            return;
+        }
+
+        if ($this->option('patch')) {
+            $routes = $this->mergeWithExistingPaths($routes);
+        }
+
         $rule = $this->generateRule($routes);
 
         $this->info('Generated Cloudflare WAF rule:');
@@ -117,6 +134,71 @@ class GenerateWafRule extends BaseCommand
         return collect($ignorable)->contains(function ($pattern) use ($route) {
             return Str::is($pattern, $route);
         });
+    }
+
+    protected function runCheck(Collection $routes): void
+    {
+        $this->newLine();
+        $this->info('Fetching existing WAF rule paths from Cloudflare...');
+
+        try {
+            $service = app(WafRuleService::class);
+            $existingPaths = $service->fetchCurrentPaths();
+
+            if ($existingPaths->isEmpty()) {
+                $this->warn('No existing WAF rule found in Cloudflare. All generated paths would be new.');
+                $this->newLine();
+
+                return;
+            }
+
+            $missing = $routes->diff($existingPaths)->values();
+
+            $this->newLine();
+
+            if ($missing->isEmpty()) {
+                $this->info('All generated paths are already present in the live WAF rule. Nothing to add.');
+
+                return;
+            }
+
+            $this->warn("{$missing->count()} path(s) in your application are missing from the live Cloudflare WAF rule:");
+            $this->newLine();
+            $missing->each(fn ($path) => $this->line("  {$path}"));
+            $this->newLine();
+            $this->comment('Run with --patch --sync to add these paths to the existing rule.');
+        } catch (CloudflareApiException $e) {
+            $this->fail('Could not fetch existing rule: '.$e->getMessage());
+        }
+    }
+
+    protected function mergeWithExistingPaths(Collection $routes): Collection
+    {
+        $this->newLine();
+        $this->info('Fetching existing WAF rule paths from Cloudflare...');
+
+        try {
+            $service = app(WafRuleService::class);
+            $existingPaths = $service->fetchCurrentPaths();
+
+            if ($existingPaths->isEmpty()) {
+                $this->warn('No existing WAF rule found. Generating fresh rule.');
+                $this->newLine();
+
+                return $routes;
+            }
+
+            $this->info("Found {$existingPaths->count()} existing paths in current WAF rule.");
+            $this->newLine();
+
+            return $routes->merge($existingPaths)->unique()->values();
+        } catch (CloudflareApiException $e) {
+            $this->error('Could not fetch existing rule: '.$e->getMessage());
+            $this->warn('Proceeding with freshly generated paths only.');
+            $this->newLine();
+
+            return $routes;
+        }
     }
 
     protected function syncToCloudflare(string $expression): void

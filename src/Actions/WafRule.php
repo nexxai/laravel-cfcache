@@ -267,6 +267,37 @@ class WafRule
     }
 
     /**
+     * Parse a Cloudflare WAF expression back into a flat collection of paths.
+     *
+     * Handles the two forms emitted by expression():
+     * - Exact paths:    http.request.uri.path in {"/a" "/b"}
+     * - Wildcard paths: http.request.uri.path wildcard "/c/*"
+     *
+     * Examples:
+     * - 'not (http.request.uri.path in {"/about" "/contact"} or http.request.uri.path wildcard "/blog/*")'
+     *   => ["/about", "/contact", "/blog/*"]
+     *
+     * @param  string  $expression  A Cloudflare WAF expression string
+     * @return Collection<int, string>
+     */
+    public function parseExpression(string $expression): Collection
+    {
+        $paths = collect();
+
+        // Extract exact paths from: http.request.uri.path in {"..." "..."}
+        if (preg_match('/http\.request\.uri\.path in \{([^}]+)\}/', $expression, $matches)) {
+            preg_match_all('/"([^"]+)"/', $matches[1], $pathMatches);
+            $paths = $paths->merge($pathMatches[1]);
+        }
+
+        // Extract wildcard paths from: http.request.uri.path wildcard "..."
+        preg_match_all('/http\.request\.uri\.path wildcard "([^"]+)"/', $expression, $wildcardMatches);
+        $paths = $paths->merge($wildcardMatches[1]);
+
+        return $paths->values();
+    }
+
+    /**
      * Build a Cloudflare WAF expression from the given routes (or from $this->routes if omitted).
      *
      * Shape:

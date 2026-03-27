@@ -171,4 +171,66 @@ class WafRuleTest extends TestCase
 
         $this->assertEquals($expected, $rule->expression());
     }
+
+    #[Test]
+    public function it_parses_an_expression_with_exact_and_wildcard_paths(): void
+    {
+        $expression = 'not (http.request.uri.path in {"/about" "/contact"} or http.request.uri.path wildcard "/blog/*")';
+
+        $paths = (new WafRule)->parseExpression($expression);
+
+        $this->assertCount(3, $paths);
+        $this->assertContains('/about', $paths);
+        $this->assertContains('/contact', $paths);
+        $this->assertContains('/blog/*', $paths);
+    }
+
+    #[Test]
+    public function it_parses_an_expression_with_only_exact_paths(): void
+    {
+        $expression = 'not (http.request.uri.path in {"/about" "/contact"})';
+
+        $paths = (new WafRule)->parseExpression($expression);
+
+        $this->assertCount(2, $paths);
+        $this->assertContains('/about', $paths);
+        $this->assertContains('/contact', $paths);
+    }
+
+    #[Test]
+    public function it_parses_an_expression_with_only_wildcard_paths(): void
+    {
+        $expression = 'not (http.request.uri.path wildcard "/admin/*" or http.request.uri.path wildcard "/blog/*")';
+
+        $paths = (new WafRule)->parseExpression($expression);
+
+        $this->assertCount(2, $paths);
+        $this->assertContains('/admin/*', $paths);
+        $this->assertContains('/blog/*', $paths);
+    }
+
+    #[Test]
+    public function it_returns_empty_collection_for_empty_expression(): void
+    {
+        $paths = (new WafRule)->parseExpression('');
+
+        $this->assertTrue($paths->isEmpty());
+    }
+
+    #[Test]
+    public function it_round_trips_optimize_and_parse(): void
+    {
+        $original = collect(['/about', '/contact', '/blog/*', '/api/users/*']);
+
+        $rule = new WafRule;
+        $rule->optimize($original);
+        $expression = $rule->expression();
+
+        $parsed = (new WafRule)->parseExpression($expression);
+
+        $this->assertContains('/about', $parsed);
+        $this->assertContains('/contact', $parsed);
+        $this->assertContains('/blog/*', $parsed);
+        $this->assertContains('/api/users/*', $parsed);
+    }
 }
