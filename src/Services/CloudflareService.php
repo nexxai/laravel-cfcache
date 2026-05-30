@@ -67,7 +67,7 @@ abstract class CloudflareService
         $token = data_get($this->config, 'api.token');
 
         if (empty($token)) {
-            throw new InvalidArgumentException('Cloudflare API token is required. Please set CF_API_TOKEN in your environment.');
+            throw new InvalidArgumentException('Cloudflare API token is required. Please set CFCACHE_API_TOKEN in your environment.');
         }
 
         return $token;
@@ -83,7 +83,7 @@ abstract class CloudflareService
         $zoneId = data_get($this->config, 'api.zone_id');
 
         if (empty($zoneId)) {
-            throw new InvalidArgumentException('Cloudflare Zone ID is required. Please set CF_ZONE_ID in your environment.');
+            throw new InvalidArgumentException('Cloudflare Zone ID is required. Please set CFCACHE_ZONE_ID in your environment.');
         }
 
         return $zoneId;
