@@ -75,6 +75,7 @@ class GenerateWafRule extends BaseCommand
         $glob = File::glob(base_path('public/{,.}*'), GLOB_BRACE);
 
         return collect($glob)
+            ->map(fn ($path) => Str::replace('\\', '/', $path))
             ->map(fn ($path) => Str::after($path, '/public/'))
             ->reject(fn ($path) => in_array($path, ['.', '..', '.htaccess', 'index.php']))
             ->map(fn ($path) => File::isDirectory(public_path($path)) ? $path.'/*' : $path)

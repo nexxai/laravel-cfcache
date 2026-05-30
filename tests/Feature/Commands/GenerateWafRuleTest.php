@@ -32,6 +32,31 @@ class GenerateWafRuleTest extends TestCase
     }
 
     #[Test]
+    public function it_prevents_routes_doesnt_contain_windows_absolute_paths()
+    {
+        $command = new GenerateWafRule;
+
+        $json = json_encode([
+            ['uri' => '/'],
+            ['uri' => 'about'],
+            ['uri' => 'api/users'],
+        ]);
+
+        $routes = $command->routes($json);
+
+        $this->assertContains('/', $routes);
+        $this->assertContains('/about', $routes);
+        $this->assertContains('/api/users', $routes);
+
+        // Assert no Windows absolute paths leaked in
+        $windowsPaths = $routes->filter(fn (string $r) => preg_match('#^/[A-Za-z]:\\\\#', $r));
+        $this->assertEmpty(
+            $windowsPaths->all(),
+            'Routes should not contain Windows absolute paths, but found: '.$windowsPaths->implode(', ')
+        );
+    }
+
+    #[Test]
     public function it_filters_out_ignorable_paths(): void
     {
         Config::set('cfcache.features.waf.ignorable_paths', ['/_dusk/*', '/admin/test']);
