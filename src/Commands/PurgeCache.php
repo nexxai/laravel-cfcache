@@ -2,12 +2,15 @@
 
 namespace JTSmith\Cloudflare\Commands;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
 use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
+use JTSmith\Cloudflare\Support\ScheduledPurgeStore;
+use Throwable;
 
 class PurgeCache extends BaseCommand
 {
@@ -16,6 +19,7 @@ class PurgeCache extends BaseCommand
     protected $signature = 'cloudflare:purge
                             {paths?* : Paths to purge (relative or full URLs). If omitted, purges all cache}
                             {--route=* : Route names to resolve and purge}
+                            {--schedule= : Schedule the purge for a timestamp parseable by Carbon}
                             {--force : Do not prompt for confirmation when purging cache}
                             {--all : Purge all cached content from Cloudflare}';
 
@@ -25,6 +29,12 @@ class PurgeCache extends BaseCommand
             $this->validateRequiredConfig(['cfcache.api.token', 'cfcache.api.zone_id']);
         } catch (ConfigValidationException $e) {
             $this->fail($e->getMessage());
+        }
+
+        if ($this->option('schedule')) {
+            $this->schedulePurge($this->option('schedule'));
+
+            return;
         }
 
         if ($this->option('all')) {
@@ -53,6 +63,37 @@ class PurgeCache extends BaseCommand
         }
         $this->newLine();
         $this->purgePaths($paths->all());
+    }
+
+    protected function schedulePurge(string $timestamp): void
+    {
+        if (! $this->option('all') && empty($this->argument('paths')) && empty($this->option('route'))) {
+            $this->warn('You must specify at least one path or route to purge. Or purge everything with `--all`.');
+
+            return;
+        }
+
+        if ($this->option('all') && ! $this->option('force') && ! $this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
+
+            return;
+        }
+
+        try {
+            $runAt = Carbon::parse($timestamp);
+        } catch (Throwable) {
+            $this->error("Unable to parse schedule timestamp: {$timestamp}");
+
+            return;
+        }
+
+        app(ScheduledPurgeStore::class)->add($runAt, $this->getName(), [
+            'paths' => $this->argument('paths'),
+            '--route' => $this->option('route'),
+            '--force' => (bool) $this->option('force'),
+            '--all' => (bool) $this->option('all'),
+        ]);
+
+        $this->info('Cloudflare cache purge scheduled for '.$runAt->toDateTimeString().'.');
     }
 
     public function resolveRoutes(array $routeNames): array

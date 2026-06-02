@@ -96,6 +96,21 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Scheduled Purges
+    |--------------------------------------------------------------------------
+    |
+    | Scheduled purge requests are stored on disk until your application's
+    | scheduler runs them. You may customize this path if the default storage
+    | location does not work for your deployment environment.
+    |
+    */
+
+    'scheduled_purges' => [
+        'file' => env('CFCACHE_SCHEDULED_PURGES_FILE', storage_path('app/laravel-cfcache/scheduled-purges.json')),
+    ],
+
     'features' => [
 
         /*

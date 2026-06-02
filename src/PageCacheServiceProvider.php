@@ -2,14 +2,14 @@
 
 namespace JTSmith\Cloudflare;
 
-use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
 use JTSmith\Cloudflare\Commands\PurgeCache;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
+use JTSmith\Cloudflare\Support\ScheduledPurgeStore;
 
-class PageCacheServiceProvider extends ServiceProvider implements DeferrableProvider
+class PageCacheServiceProvider extends ServiceProvider
 {
     /**
      * Bootstrap the application events.
@@ -49,6 +49,8 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
         $this->app->singleton(CachePurgeService::class, function ($app) {
             return new CachePurgeService($app['config']->get('cfcache', []));
         });
+
+        $this->app->singleton(ScheduledPurgeStore::class);
     }
 
     /**
@@ -60,6 +62,7 @@ class PageCacheServiceProvider extends ServiceProvider implements DeferrableProv
             CachePurgeService::class,
             GenerateWafRule::class,
             PurgeCache::class,
+            ScheduledPurgeStore::class,
             WafRuleService::class,
         ];
     }
