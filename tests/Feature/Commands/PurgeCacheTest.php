@@ -5,6 +5,7 @@ namespace Tests\Feature\Commands;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use JTSmith\Cloudflare\Commands\PurgeCache;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 use Mockery;
@@ -127,7 +128,7 @@ class PurgeCacheTest extends TestCase
     #[Test]
     public function it_resolves_routes_to_paths(): void
     {
-        $command = new \JTSmith\Cloudflare\Commands\PurgeCache;
+        $command = new PurgeCache;
 
         // Mock Route::getRoutes()
         $mockRouteCollection = Mockery::mock();
