@@ -61,6 +61,10 @@ php artisan cloudflare:purge / /about https://example.com/faq https://example.co
 
 # Purge by route names
 php artisan cloudflare:purge --route=home --route=users.index --route=auth.login
+
+# Schedule a purge for later
+php artisan cloudflare:purge /about --schedule="2026-06-03 10:00:00"
+php artisan cloudflare:purge --route=home --schedule="tomorrow 02:00"
 ```
 
 Please see the [Notes](#notes) section below for additional information and
@@ -124,6 +128,10 @@ return [
             'retry_attempts' => env('CFCACHE_API_RETRY_ATTEMPTS', 3),
             'retry_delay' => env('CFCACHE_API_RETRY_DELAY', 1000),
         ],
+    ],
+
+    'scheduled_purges' => [
+        'file' => env('CFCACHE_SCHEDULED_PURGES_FILE', storage_path('app/laravel-cfcache/scheduled-purges.json')),
     ],
 
     'features' => [
@@ -255,6 +263,45 @@ php artisan cloudflare:purge --routes=home --routes=about --routes=users.show
 
 # Combine routes and paths
 php artisan cloudflare:purge /blog --routes=contact --routes=api.users.index
+```
+
+### Scheduled Cache Purges
+
+Add `--schedule` with any timestamp Carbon can parse to store a purge for later:
+
+```sh
+# Schedule specific paths
+php artisan cloudflare:purge /about /contact --schedule="2026-06-03 10:00:00"
+
+# Schedule route-based purges
+php artisan cloudflare:purge --route=home --route=users.index --schedule="tomorrow 02:00"
+
+# Schedule a full cache purge
+php artisan cloudflare:purge --all --force --schedule="2026-06-03 10:00:00"
+```
+
+Scheduled purges are stored on disk at the path configured by
+`cfcache.scheduled_purges.file`, which defaults to
+`storage/app/laravel-cfcache/scheduled-purges.json`. The stored command
+parameters do not include `--schedule`, so due purges are re-run as normal
+`cloudflare:purge` commands.
+
+> [!NOTE]
+> This package does *NOT* automatically register a Laravel scheduled task. You must
+> opt in by adding one to your application. This is intentional because scheduled
+> tasks can have a financial impact on hosting providers such as
+> [Laravel Cloud](https://cloud.laravel.com/docs/scheduled-tasks).
+
+Add this to your `routes/console.php`:
+
+```php
+use Illuminate\Support\Facades\Schedule;
+use JTSmith\Cloudflare\Support\ScheduledPurgeStore;
+
+Schedule::call(fn (ScheduledPurgeStore $store) => $store->runDue())
+    ->name('cloudflare-scheduled-cache-purges')
+    ->everyMinute()
+    ->withoutOverlapping();
 ```
 
 ### Cloudflare API Configuration for Cache Purging

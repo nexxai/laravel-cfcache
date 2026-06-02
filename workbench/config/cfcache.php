@@ -96,6 +96,10 @@ return [
         ],
     ],
 
+    'scheduled_purges' => [
+        'file' => env('CFCACHE_SCHEDULED_PURGES_FILE', storage_path('app/laravel-cfcache/scheduled-purges.json')),
+    ],
+
     'features' => [
 
         /*
