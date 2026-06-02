@@ -174,6 +174,18 @@ return [
             */
 
             'ignorable_paths' => ['/_dusk/*'],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Forced Allowed Paths
+            |--------------------------------------------------------------------------
+            |
+            | Paths that should always be included in the WAF allowlist even though they
+            | are not part of your application routes. Supports wildcards.
+            |
+            */
+
+            'forced_allowed_paths' => [],
         ],
     ],
 ];

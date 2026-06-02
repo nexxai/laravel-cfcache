@@ -79,6 +79,24 @@ class GenerateWafRuleTest extends TestCase
     }
 
     #[Test]
+    public function it_includes_forced_allowed_paths_in_the_allowlist(): void
+    {
+        Config::set('cfcache.features.waf.forced_allowed_paths', ['/cdn-cgi/zaraz/s.js', 'cdn-cgi/monitor/xhr']);
+
+        $command = new GenerateWafRule;
+
+        $json = json_encode([
+            ['uri' => '/'],
+        ]);
+
+        $routes = $command->routes($json);
+
+        $this->assertContains('/', $routes);
+        $this->assertContains('/cdn-cgi/zaraz/s.js', $routes);
+        $this->assertContains('/cdn-cgi/monitor/xhr', $routes);
+    }
+
+    #[Test]
     public function it_fails_when_syncing_and_api_token_is_not_set(): void
     {
         Config::set('cfcache.api.token', null);

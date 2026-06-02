@@ -130,6 +130,7 @@ return [
             'rule_action' => env('CFCACHE_RULE_ACTION', 'block'),
             'hostnames' => env('CFCACHE_RULE_HOSTNAMES') ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES')))) : [],
             'ignorable_paths' => ['/_dusk/*'],
+            'forced_allowed_paths' => [],
         ],
     ],
 ];
@@ -167,6 +168,22 @@ The patterns support wildcards using Laravel's `Str::is()` syntax:
 
 By default, only `/_dusk/*` is ignored to prevent Dusk testing routes from being
 included in production rules.
+
+#### Forced Allowed Paths
+
+Paths that are not part of your Laravel routes but must be allowed by the WAF
+(e.g. Cloudflare-injected scripts like Zaraz) can be added so they are always
+included in the allowlist:
+
+```php
+'forced_allowed_paths' => [
+    '/cdn-cgi/zaraz/s.js',  // Cloudflare Zaraz
+    '/cdn-cgi/monitor/xhr', // Optional: other edge-injected paths
+],
+```
+
+Wildcards are supported (e.g. `/cdn-cgi/zaraz/*`). Paths are normalized with a
+leading slash if omitted.
 
 #### Hostnames
 

@@ -54,6 +54,7 @@ class GenerateWafRule extends BaseCommand
         $routes = collect(json_decode($json, true))
             ->pluck('uri')
             ->merge($this->publicPaths())
+            ->merge($this->forcedAllowedPaths())
             ->unique()
             ->map(function ($route) {
                 if (! str_contains($route, '{')) {
@@ -111,6 +112,17 @@ class GenerateWafRule extends BaseCommand
         }
 
         return $waf_rule->expression();
+    }
+
+    public function forcedAllowedPaths(): array
+    {
+        $paths = config('cfcache.features.waf.forced_allowed_paths') ?: [];
+
+        return collect($paths)
+            ->map(fn (string $path) => Str::startsWith($path, '/') ? $path : '/'.$path)
+            ->reject(fn (string $path) => $path === '/' || $path === '*')
+            ->values()
+            ->all();
     }
 
     protected function isIgnorablePath(string $route): bool
