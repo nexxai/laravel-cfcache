@@ -53,6 +53,9 @@ Purge all cached content or specific paths/routes:
 # Purge all cache
 php artisan cloudflare:purge --all
 
+# Purge all cache without confirmation
+php artisan cloudflare:purge --all --force
+
 # Purge specific paths (absolute or relative, separated by spaces, wildcards supported)
 php artisan cloudflare:purge / /about https://example.com/faq https://example.com/our-team/*
 
@@ -215,6 +218,12 @@ Purge all cached content from Cloudflare:
 php artisan cloudflare:purge --all
 ```
 
+Add `--force` to skip the confirmation prompt when purging all cached content:
+
+```sh
+php artisan cloudflare:purge --all --force
+```
+
 ### Purge Specific Paths
 
 Purge specific paths (relative paths will be prefixed with your app URL):
@@ -288,6 +297,7 @@ add a `.well-known/*` rule to the wildcard section of your WAF rule.
 - Relative paths are automatically prefixed with your `APP_URL`
 - Full URLs (starting with `http://` or `https://`) are used as-is
 - Unknown route names are silently skipped
+- Add `--force` with `--all` to skip the confirmation prompt
 - Cache purging requires different API permissions than WAF rule management
 
 ## Contributing

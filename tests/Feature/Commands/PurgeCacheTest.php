@@ -5,6 +5,7 @@ namespace Tests\Feature\Commands;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
+use JTSmith\Cloudflare\Commands\PurgeCache;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Services\Cloudflare\CachePurgeService;
 use Mockery;
@@ -65,6 +66,28 @@ class PurgeCacheTest extends TestCase
     }
 
     #[Test]
+    public function it_purges_all_cache_without_confirmation_when_the_force_flag_is_provided(): void
+    {
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-all-123'],
+            ]),
+        ]);
+
+        $this->artisan('cloudflare:purge', ['--all' => true, '--force' => true])
+            ->expectsOutput('Purging all cached content from Cloudflare...')
+            ->expectsOutput('Cache purge completed successfully!')
+            ->assertExitCode(0);
+
+        Http::assertSent(function ($request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['purge_everything' => true];
+        });
+    }
+
+    #[Test]
     public function it_errors_when_no_paths_or_routes_are_provided(): void
     {
         $this->artisan('cloudflare:purge')
@@ -105,7 +128,7 @@ class PurgeCacheTest extends TestCase
     #[Test]
     public function it_resolves_routes_to_paths(): void
     {
-        $command = new \JTSmith\Cloudflare\Commands\PurgeCache;
+        $command = new PurgeCache;
 
         // Mock Route::getRoutes()
         $mockRouteCollection = Mockery::mock();

@@ -16,6 +16,7 @@ class PurgeCache extends BaseCommand
     protected $signature = 'cloudflare:purge
                             {paths?* : Paths to purge (relative or full URLs). If omitted, purges all cache}
                             {--route=* : Route names to resolve and purge}
+                            {--force : Do not prompt for confirmation when purging cache}
                             {--all : Purge all cached content from Cloudflare}';
 
     public function handle(): void
@@ -27,7 +28,7 @@ class PurgeCache extends BaseCommand
         }
 
         if ($this->option('all')) {
-            if ($this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
+            if ($this->option('force') || $this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
                 $this->purgeAll();
             }
 

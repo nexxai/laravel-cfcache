@@ -2,6 +2,7 @@
 
 namespace JTSmith\Cloudflare\Http\Clients;
 
+use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Http\CloudflareApiClient;
 
 /**
@@ -14,7 +15,7 @@ class WafApiClient extends CloudflareApiClient
      *
      * @return array Array of firewall rule data
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function getFirewallRules(): array
     {
@@ -29,7 +30,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  string  $ruleId  The firewall rule ID
      * @return array The firewall rule data
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function getFirewallRule(string $ruleId): array
     {
@@ -44,7 +45,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  array  $rules  Array of rule definitions
      * @return array The created firewall rules
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function createFirewallRules(array $rules): array
     {
@@ -60,7 +61,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  array  $ruleData  The updated rule data
      * @return array The updated firewall rule
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function updateFirewallRule(string $ruleId, array $ruleData): array
     {
@@ -74,7 +75,7 @@ class WafApiClient extends CloudflareApiClient
      *
      * @param  string  $ruleId  The firewall rule ID to delete
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function deleteFirewallRule(string $ruleId): void
     {
@@ -87,7 +88,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  array  $filters  Array of filter definitions
      * @return array The created filters
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function createFilters(array $filters): array
     {
@@ -101,7 +102,7 @@ class WafApiClient extends CloudflareApiClient
      *
      * @return array Array of filter data
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function getFilters(): array
     {
@@ -116,7 +117,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  string  $filterId  The filter ID
      * @return array The filter data
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function getFilter(string $filterId): array
     {
@@ -132,7 +133,7 @@ class WafApiClient extends CloudflareApiClient
      * @param  array  $filterData  The updated filter data
      * @return array The updated filter
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function updateFilter(string $filterId, array $filterData): array
     {
@@ -146,7 +147,7 @@ class WafApiClient extends CloudflareApiClient
      *
      * @param  string  $filterId  The filter ID to delete
      *
-     * @throws \JTSmith\Cloudflare\Exceptions\CloudflareApiException If the request fails
+     * @throws CloudflareApiException If the request fails
      */
     public function deleteFilter(string $filterId): void
     {
