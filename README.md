@@ -63,7 +63,7 @@ php artisan cloudflare:purge / /about https://example.com/faq https://example.co
 php artisan cloudflare:purge --route=home --route=users.index --route=auth.login
 
 # Purge everything under one or more URL prefixes
-php artisan cloudflare:purge --prefix=https://www.example.com/
+php artisan cloudflare:purge --prefix=www.example.com/
 
 # Purge everything cached for one or more hosts
 php artisan cloudflare:purge --host=www.example.com
@@ -277,10 +277,10 @@ Use `--prefix` when you want to purge every cached URL under a specific prefix w
 
 ```sh
 # Purge the marketing site only
-php artisan cloudflare:purge --prefix=https://www.example.com/
+php artisan cloudflare:purge --prefix=www.example.com/
 
 # Purge multiple URL prefixes
-php artisan cloudflare:purge --prefix=https://www.example.com/blog/ --prefix=https://www.example.com/docs/
+php artisan cloudflare:purge --prefix=www.example.com/blog/ --prefix=www.example.com/docs/
 ```
 
 Use `--host` when you want to purge everything cached for a host:
@@ -310,7 +310,7 @@ php artisan cloudflare:purge --route=home --route=users.index --schedule="tomorr
 php artisan cloudflare:purge --all --force --schedule="2026-06-03 10:00:00"
 
 # Schedule a prefix purge
-php artisan cloudflare:purge --prefix=https://www.example.com/ --schedule="2026-06-03 10:00:00"
+php artisan cloudflare:purge --prefix=www.example.com/ --schedule="2026-06-03 10:00:00"
 ```
 
 Scheduled purges are stored on disk at the path configured by

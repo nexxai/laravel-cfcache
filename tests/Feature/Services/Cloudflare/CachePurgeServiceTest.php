@@ -84,7 +84,7 @@ class CachePurgeServiceTest extends TestCase
     #[Test]
     public function it_purges_prefixes_successfully(): void
     {
-        $prefixes = ['https://www.example.com/'];
+        $prefixes = ['www.example.com/'];
 
         Http::fake([
             '*/purge_cache' => Http::response([

@@ -142,9 +142,9 @@ class PurgeCacheTest extends TestCase
             ]),
         ]);
 
-        $this->artisan('cloudflare:purge', ['--prefix' => ['https://www.example.com/']])
+        $this->artisan('cloudflare:purge', ['--prefix' => ['www.example.com/']])
             ->expectsOutput('Purging URL prefixes from Cloudflare cache:')
-            ->expectsOutput('https://www.example.com/')
+            ->expectsOutput('www.example.com/')
             ->expectsOutput('Successfully purged cached content matching prefixes')
             ->expectsOutput('  Purge ID: purge-prefixes-123')
             ->expectsOutput('  Prefixes purged: 1')
@@ -154,7 +154,7 @@ class PurgeCacheTest extends TestCase
         Http::assertSent(function ($request) {
             return $request->method() === 'POST'
                 && str_contains($request->url(), 'purge_cache')
-                && $request->data() === ['prefixes' => ['https://www.example.com/']];
+                && $request->data() === ['prefixes' => ['www.example.com/']];
         });
     }
 
@@ -190,7 +190,7 @@ class PurgeCacheTest extends TestCase
         Http::fake();
 
         $this->artisan('cloudflare:purge', [
-            '--prefix' => ['https://www.example.com/'],
+            '--prefix' => ['www.example.com/'],
             '--host' => ['www.example.com'],
         ])
             ->expectsOutput('The `--prefix` and `--host` options cannot be used together.')
@@ -206,7 +206,7 @@ class PurgeCacheTest extends TestCase
 
         $this->artisan('cloudflare:purge', [
             'paths' => ['about'],
-            '--prefix' => ['https://www.example.com/'],
+            '--prefix' => ['www.example.com/'],
         ])
             ->expectsOutput('The `--prefix` and `--host` options cannot be used with paths, routes, or `--all`.')
             ->assertExitCode(0);
