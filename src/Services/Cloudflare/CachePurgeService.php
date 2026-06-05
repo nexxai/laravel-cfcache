@@ -55,4 +55,25 @@ class CachePurgeService extends CloudflareService
             message: $message
         );
     }
+
+    public function purgePrefixes(array $prefixes): CachePurgeResult
+    {
+        return $this->purgeWildcard('prefixes', $prefixes, 'Successfully purged cached content matching prefixes');
+    }
+
+    public function purgeHosts(array $hosts): CachePurgeResult
+    {
+        return $this->purgeWildcard('hosts', $hosts, 'Successfully purged cached content matching hosts');
+    }
+
+    protected function purgeWildcard(string $key, array $values, string $message): CachePurgeResult
+    {
+        $response = $this->apiClient->post("zones/{$this->apiClient->getZoneId()}/purge_cache", [$key => $values]);
+        $result = $response->json('result');
+
+        return new CachePurgeResult(
+            id: $result['id'],
+            message: $message
+        );
+    }
 }

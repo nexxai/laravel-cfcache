@@ -62,6 +62,12 @@ php artisan cloudflare:purge / /about https://example.com/faq https://example.co
 # Purge by route names
 php artisan cloudflare:purge --route=home --route=users.index --route=auth.login
 
+# Purge everything under one or more URL prefixes
+php artisan cloudflare:purge --prefix=www.example.com/
+
+# Purge everything cached for one or more hosts
+php artisan cloudflare:purge --host=www.example.com
+
 # Schedule a purge for later
 php artisan cloudflare:purge /about --schedule="2026-06-03 10:00:00"
 php artisan cloudflare:purge --route=home --schedule="tomorrow 02:00"
@@ -259,11 +265,35 @@ Purge cache for specific Laravel routes by name (route parameters are converted 
 
 ```sh
 # Purge by route names
-php artisan cloudflare:purge --routes=home --routes=about --routes=users.show
+php artisan cloudflare:purge --route=home --route=about --route=users.show
 
 # Combine routes and paths
-php artisan cloudflare:purge /blog --routes=contact --routes=api.users.index
+php artisan cloudflare:purge /blog --route=contact --route=api.users.index
 ```
+
+### Purge by Prefix or Host
+
+Use `--prefix` when you want to purge every cached URL under a specific prefix without purging the whole zone. This is useful for deploys where one Cloudflare zone contains multiple sites or subdomains:
+
+```sh
+# Purge the marketing site only
+php artisan cloudflare:purge --prefix=www.example.com/
+
+# Purge multiple URL prefixes
+php artisan cloudflare:purge --prefix=www.example.com/blog/ --prefix=www.example.com/docs/
+```
+
+Use `--host` when you want to purge everything cached for a host:
+
+```sh
+# Purge all cached content for one host
+php artisan cloudflare:purge --host=www.example.com
+
+# Purge all cached content for multiple hosts
+php artisan cloudflare:purge --host=www.example.com --host=marketing.example.com
+```
+
+`--prefix` and `--host` are exclusive purge modes. They cannot be used together, and neither option can be combined with paths, `--route`, or `--all`.
 
 ### Scheduled Cache Purges
 
@@ -278,6 +308,9 @@ php artisan cloudflare:purge --route=home --route=users.index --schedule="tomorr
 
 # Schedule a full cache purge
 php artisan cloudflare:purge --all --force --schedule="2026-06-03 10:00:00"
+
+# Schedule a prefix purge
+php artisan cloudflare:purge --prefix=www.example.com/ --schedule="2026-06-03 10:00:00"
 ```
 
 Scheduled purges are stored on disk at the path configured by
@@ -345,6 +378,9 @@ add a `.well-known/*` rule to the wildcard section of your WAF rule.
 - Full URLs (starting with `http://` or `https://`) are used as-is
 - Unknown route names are silently skipped
 - Add `--force` with `--all` to skip the confirmation prompt
+- Use `--prefix` to purge every cached URL under a URL prefix
+- Use `--host` to purge everything cached for a host
+- `--prefix` and `--host` cannot be combined with each other, paths, routes, or `--all`
 - Cache purging requires different API permissions than WAF rule management
 
 ## Contributing

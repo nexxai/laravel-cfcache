@@ -82,6 +82,58 @@ class CachePurgeServiceTest extends TestCase
     }
 
     #[Test]
+    public function it_purges_prefixes_successfully(): void
+    {
+        $prefixes = ['www.example.com/'];
+
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-prefixes-123'],
+            ]),
+        ]);
+
+        $service = new CachePurgeService($this->validConfig);
+        $result = $service->purgePrefixes($prefixes);
+
+        $this->assertInstanceOf(CachePurgeResult::class, $result);
+        $this->assertEquals('purge-prefixes-123', $result->id);
+        $this->assertStringContainsString('prefixes', $result->message);
+
+        Http::assertSent(function ($request) use ($prefixes) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['prefixes' => $prefixes];
+        });
+    }
+
+    #[Test]
+    public function it_purges_hosts_successfully(): void
+    {
+        $hosts = ['www.example.com'];
+
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-hosts-123'],
+            ]),
+        ]);
+
+        $service = new CachePurgeService($this->validConfig);
+        $result = $service->purgeHosts($hosts);
+
+        $this->assertInstanceOf(CachePurgeResult::class, $result);
+        $this->assertEquals('purge-hosts-123', $result->id);
+        $this->assertStringContainsString('hosts', $result->message);
+
+        Http::assertSent(function ($request) use ($hosts) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['hosts' => $hosts];
+        });
+    }
+
+    #[Test]
     public function it_purges_all_cache_when_empty_array_provided(): void
     {
         Http::fake([

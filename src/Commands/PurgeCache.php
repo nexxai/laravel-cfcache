@@ -19,6 +19,8 @@ class PurgeCache extends BaseCommand
     protected $signature = 'cloudflare:purge
                             {paths?* : Paths to purge (relative or full URLs). If omitted, purges all cache}
                             {--route=* : Route names to resolve and purge}
+                            {--prefix=* : URL prefixes to purge}
+                            {--host=* : Hosts to purge}
                             {--schedule= : Schedule the purge for a timestamp parseable by Carbon}
                             {--force : Do not prompt for confirmation when purging cache}
                             {--all : Purge all cached content from Cloudflare}';
@@ -31,6 +33,10 @@ class PurgeCache extends BaseCommand
             $this->fail($e->getMessage());
         }
 
+        if (! $this->validatePurgeOptions()) {
+            return;
+        }
+
         if ($this->option('schedule')) {
             $this->schedulePurge($this->option('schedule'));
 
@@ -41,6 +47,18 @@ class PurgeCache extends BaseCommand
             if ($this->option('force') || $this->confirm('Are you sure you want to purge all cached content from Cloudflare?')) {
                 $this->purgeAll();
             }
+
+            return;
+        }
+
+        if (! empty($this->option('prefix'))) {
+            $this->purgePrefixes($this->option('prefix'));
+
+            return;
+        }
+
+        if (! empty($this->option('host'))) {
+            $this->purgeHosts($this->option('host'));
 
             return;
         }
@@ -67,7 +85,7 @@ class PurgeCache extends BaseCommand
 
     protected function schedulePurge(string $timestamp): void
     {
-        if (! $this->option('all') && empty($this->argument('paths')) && empty($this->option('route'))) {
+        if (! $this->hasPurgeTarget()) {
             $this->warn('You must specify at least one path or route to purge. Or purge everything with `--all`.');
 
             return;
@@ -89,6 +107,8 @@ class PurgeCache extends BaseCommand
         app(ScheduledPurgeStore::class)->add($runAt, $this->getName(), [
             'paths' => $this->argument('paths'),
             '--route' => $this->option('route'),
+            '--prefix' => $this->option('prefix'),
+            '--host' => $this->option('host'),
             '--force' => (bool) $this->option('force'),
             '--all' => (bool) $this->option('all'),
         ]);
@@ -121,6 +141,36 @@ class PurgeCache extends BaseCommand
         }
 
         return array_unique($resolvedPaths);
+    }
+
+    protected function validatePurgeOptions(): bool
+    {
+        $usesUrlOptions = ! empty($this->argument('paths')) || ! empty($this->option('route')) || $this->option('all');
+        $usesPrefix = ! empty($this->option('prefix'));
+        $usesHost = ! empty($this->option('host'));
+
+        if ($usesPrefix && $usesHost) {
+            $this->warn('The `--prefix` and `--host` options cannot be used together.');
+
+            return false;
+        }
+
+        if (($usesPrefix || $usesHost) && $usesUrlOptions) {
+            $this->warn('The `--prefix` and `--host` options cannot be used with paths, routes, or `--all`.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    protected function hasPurgeTarget(): bool
+    {
+        return $this->option('all')
+            || ! empty($this->argument('paths'))
+            || ! empty($this->option('route'))
+            || ! empty($this->option('prefix'))
+            || ! empty($this->option('host'));
     }
 
     protected function processPaths(string $path): string
@@ -169,6 +219,58 @@ class PurgeCache extends BaseCommand
             $this->info($result->message);
             $this->line("  Purge ID: {$result->id}");
             $this->line('  Paths purged: '.count($paths));
+            $this->newLine();
+            $this->info('Cache purge completed successfully!');
+        } catch (CloudflareApiException $e) {
+            $this->handleApiException($e);
+        } catch (CloudflareException $e) {
+            $this->error('Failed to purge cache: '.$e->getMessage());
+            $this->newLine();
+            $this->warn('An unexpected error occurred. Please check your configuration and try again.');
+        }
+    }
+
+    protected function purgePrefixes(array $prefixes): void
+    {
+        $this->info('Purging URL prefixes from Cloudflare cache:');
+        foreach ($prefixes as $prefix) {
+            $this->line($prefix);
+        }
+        $this->newLine();
+
+        try {
+            $service = app(CachePurgeService::class);
+            $result = $service->purgePrefixes($prefixes);
+
+            $this->info($result->message);
+            $this->line("  Purge ID: {$result->id}");
+            $this->line('  Prefixes purged: '.count($prefixes));
+            $this->newLine();
+            $this->info('Cache purge completed successfully!');
+        } catch (CloudflareApiException $e) {
+            $this->handleApiException($e);
+        } catch (CloudflareException $e) {
+            $this->error('Failed to purge cache: '.$e->getMessage());
+            $this->newLine();
+            $this->warn('An unexpected error occurred. Please check your configuration and try again.');
+        }
+    }
+
+    protected function purgeHosts(array $hosts): void
+    {
+        $this->info('Purging hosts from Cloudflare cache:');
+        foreach ($hosts as $host) {
+            $this->line($host);
+        }
+        $this->newLine();
+
+        try {
+            $service = app(CachePurgeService::class);
+            $result = $service->purgeHosts($hosts);
+
+            $this->info($result->message);
+            $this->line("  Purge ID: {$result->id}");
+            $this->line('  Hosts purged: '.count($hosts));
             $this->newLine();
             $this->info('Cache purge completed successfully!');
         } catch (CloudflareApiException $e) {

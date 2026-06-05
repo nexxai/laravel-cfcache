@@ -133,6 +133,88 @@ class PurgeCacheTest extends TestCase
     }
 
     #[Test]
+    public function it_purges_prefixes(): void
+    {
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-prefixes-123'],
+            ]),
+        ]);
+
+        $this->artisan('cloudflare:purge', ['--prefix' => ['www.example.com/']])
+            ->expectsOutput('Purging URL prefixes from Cloudflare cache:')
+            ->expectsOutput('www.example.com/')
+            ->expectsOutput('Successfully purged cached content matching prefixes')
+            ->expectsOutput('  Purge ID: purge-prefixes-123')
+            ->expectsOutput('  Prefixes purged: 1')
+            ->expectsOutput('Cache purge completed successfully!')
+            ->assertExitCode(0);
+
+        Http::assertSent(function ($request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['prefixes' => ['www.example.com/']];
+        });
+    }
+
+    #[Test]
+    public function it_purges_hosts(): void
+    {
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-hosts-123'],
+            ]),
+        ]);
+
+        $this->artisan('cloudflare:purge', ['--host' => ['www.example.com']])
+            ->expectsOutput('Purging hosts from Cloudflare cache:')
+            ->expectsOutput('www.example.com')
+            ->expectsOutput('Successfully purged cached content matching hosts')
+            ->expectsOutput('  Purge ID: purge-hosts-123')
+            ->expectsOutput('  Hosts purged: 1')
+            ->expectsOutput('Cache purge completed successfully!')
+            ->assertExitCode(0);
+
+        Http::assertSent(function ($request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['hosts' => ['www.example.com']];
+        });
+    }
+
+    #[Test]
+    public function it_rejects_prefix_and_host_together(): void
+    {
+        Http::fake();
+
+        $this->artisan('cloudflare:purge', [
+            '--prefix' => ['www.example.com/'],
+            '--host' => ['www.example.com'],
+        ])
+            ->expectsOutput('The `--prefix` and `--host` options cannot be used together.')
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function it_rejects_prefix_with_url_options(): void
+    {
+        Http::fake();
+
+        $this->artisan('cloudflare:purge', [
+            'paths' => ['about'],
+            '--prefix' => ['www.example.com/'],
+        ])
+            ->expectsOutput('The `--prefix` and `--host` options cannot be used with paths, routes, or `--all`.')
+            ->assertExitCode(0);
+
+        Http::assertNothingSent();
+    }
+
+    #[Test]
     public function it_schedules_a_purge_without_calling_cloudflare(): void
     {
         Http::fake([
