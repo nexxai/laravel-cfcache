@@ -60,4 +60,9 @@ jobs:
           composer update --prefer-dist --no-interaction
 
       - name: Run tests
+        if: runner.os != 'Windows'
         run: vendor/bin/pest --parallel
+
+      - name: Run tests on Windows
+        if: runner.os == 'Windows'
+        run: vendor/bin/pest
