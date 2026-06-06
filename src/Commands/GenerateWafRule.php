@@ -11,6 +11,7 @@ use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Exceptions\CloudflareException;
 use JTSmith\Cloudflare\Exceptions\ConfigValidationException;
 use JTSmith\Cloudflare\Services\Cloudflare\WafRuleService;
+use Throwable;
 
 class GenerateWafRule extends BaseCommand
 {
@@ -32,7 +33,7 @@ class GenerateWafRule extends BaseCommand
         Artisan::call('route:list', ['--json' => true]);
         $json = Artisan::output();
 
-        $routes = $this->routes($json);
+        $routes = $this->routes($json, $this->folioRoutes());
         $rule = $this->generateRule($routes);
 
         $hostnames = config('cfcache.features.waf.hostnames', []);
@@ -49,10 +50,12 @@ class GenerateWafRule extends BaseCommand
         }
     }
 
-    public function routes(string $json): Collection
+    public function routes(string $json, Collection|array $additionalRoutes = []): Collection
     {
-        $routes = collect(json_decode($json, true))
+        $routes = collect(json_decode($json, true) ?: [])
+            ->reject(fn (array $route) => $this->isFolioFallbackRoute($route))
             ->pluck('uri')
+            ->merge($additionalRoutes)
             ->merge($this->publicPaths())
             ->merge($this->forcedAllowedPaths())
             ->unique()
@@ -75,6 +78,29 @@ class GenerateWafRule extends BaseCommand
             ->values();
 
         return $routes;
+    }
+
+    protected function folioRoutes(): Collection
+    {
+        if (! class_exists('Laravel\\Folio\\FolioManager')) {
+            return collect();
+        }
+
+        try {
+            Artisan::call('folio:list', ['--json' => true]);
+        } catch (Throwable) {
+            return collect();
+        }
+
+        return collect(json_decode(Artisan::output(), true) ?: [])
+            ->pluck('uri')
+            ->values();
+    }
+
+    protected function isFolioFallbackRoute(array $route): bool
+    {
+        return ($route['name'] ?? null) === 'laravel-folio'
+            && ($route['uri'] ?? null) === '{fallbackPlaceholder}';
     }
 
     public function publicPaths(): array

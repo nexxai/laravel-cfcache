@@ -122,6 +122,65 @@ class GenerateWafRuleTest extends TestCase
     }
 
     #[Test]
+    public function it_filters_out_the_folio_fallback_route_and_includes_folio_routes(): void
+    {
+        $command = new GenerateWafRule;
+
+        $json = json_encode([
+            [
+                'name' => 'laravel-folio',
+                'uri' => '{fallbackPlaceholder}',
+            ],
+            [
+                'name' => null,
+                'uri' => '/',
+            ],
+        ]);
+
+        $routes = $command->routes($json, [
+            '/blog/{slug}',
+            '/docs/{...path}',
+        ]);
+
+        $this->assertContains('/', $routes);
+        $this->assertContains('/blog/*', $routes);
+        $this->assertContains('/docs/*', $routes);
+        $this->assertNotContains('/*', $routes);
+    }
+
+    #[Test]
+    public function it_normalizes_folio_placeholder_routes(): void
+    {
+        $command = new GenerateWafRule;
+
+        $routes = $command->routes(json_encode([]), [
+            '/folio-placeholders/custom-key-alt/{user:name}',
+            '/folio-placeholders/custom-key/{user:email}',
+            '/folio-placeholders/fqcn-alt/{user}',
+            '/folio-placeholders/fqcn/{user}',
+            '/folio-placeholders/model-alt/{user}',
+            '/folio-placeholders/model/{user}',
+            '/folio-placeholders/multi-alt/{..paths}',
+            '/folio-placeholders/multi/{..ids}',
+            '/folio-placeholders/plain-alt/{slug}',
+            '/folio-placeholders/plain/{id}',
+        ]);
+
+        $this->assertContains('/folio-placeholders/custom-key-alt/*', $routes);
+        $this->assertContains('/folio-placeholders/custom-key/*', $routes);
+        $this->assertContains('/folio-placeholders/fqcn-alt/*', $routes);
+        $this->assertContains('/folio-placeholders/fqcn/*', $routes);
+        $this->assertContains('/folio-placeholders/model-alt/*', $routes);
+        $this->assertContains('/folio-placeholders/model/*', $routes);
+        $this->assertContains('/folio-placeholders/multi-alt/*', $routes);
+        $this->assertContains('/folio-placeholders/multi/*', $routes);
+        $this->assertContains('/folio-placeholders/plain-alt/*', $routes);
+        $this->assertContains('/folio-placeholders/plain/*', $routes);
+
+        $this->assertFalse($routes->contains(fn (string $route) => str_contains($route, '{')));
+    }
+
+    #[Test]
     public function it_fails_when_syncing_and_api_token_is_not_set(): void
     {
         Config::set('cfcache.api.token', null);
