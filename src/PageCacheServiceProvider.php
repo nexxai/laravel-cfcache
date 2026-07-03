@@ -16,12 +16,12 @@ class PageCacheServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                GenerateWafRule::class,
-                PurgeCache::class,
-            ]);
+        $this->commands([
+            GenerateWafRule::class,
+            PurgeCache::class,
+        ]);
 
+        if ($this->app->runningInConsole()) {
             // Publish configuration file
             $this->publishes([
                 __DIR__.'/../config/cfcache.php' => config_path('cfcache.php'),

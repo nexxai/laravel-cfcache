@@ -3,6 +3,7 @@
 namespace Tests\Feature\Commands;
 
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -100,6 +101,28 @@ class PurgeCacheTest extends TestCase
         $this->artisan('cloudflare:purge')
             ->expectsOutput('You must specify at least one path or route to purge. Or purge everything with `--all`.')
             ->assertExitCode(0);
+    }
+
+    #[Test]
+    public function it_can_be_called_from_the_artisan_facade(): void
+    {
+        Http::fake([
+            '*/purge_cache' => Http::response([
+                'success' => true,
+                'result' => ['id' => 'purge-paths-456'],
+            ]),
+        ]);
+
+        $exitCode = Artisan::call('cloudflare:purge', ['paths' => ['/']]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('Cache purge completed successfully!', Artisan::output());
+
+        Http::assertSent(function ($request) {
+            return $request->method() === 'POST'
+                && str_contains($request->url(), 'purge_cache')
+                && $request->data() === ['files' => ['https://example.com/']];
+        });
     }
 
     #[Test]
