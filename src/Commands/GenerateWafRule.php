@@ -177,7 +177,7 @@ class GenerateWafRule extends BaseCommand
             $this->info($result->message);
             $this->line("  Action: {$result->action} WAF rule");
             $this->line("  Rule ID: {$result->ruleId}");
-            $this->line("  Filter ID: {$result->filterId}");
+            $this->line("  Ruleset ID: {$result->rulesetId}");
             $this->line('  Expression length: '.Str::length($expression).' characters');
             $this->newLine();
             $this->info('Sync completed successfully!');
@@ -187,7 +187,7 @@ class GenerateWafRule extends BaseCommand
             if ($e->isAuthenticationError()) {
                 $this->warn('Authentication failed. Please verify:');
                 $this->line('  - Your API token is valid and not expired');
-                $this->line('  - The token has "Zone:Firewall Services:Edit" permission');
+                $this->line('  - The token has "Zone WAF:Edit" permission');
                 $this->line('  - The Zone ID matches your domain');
             } elseif ($e->isRateLimitError()) {
                 $this->warn('Rate limit exceeded. Please wait a moment and try again.');

@@ -118,244 +118,103 @@ class WafRuleServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_creates_new_waf_rule_successfully(): void
+    public function it_creates_ruleset_when_none_exists(): void
     {
-        Http::fake([
-            '*/firewall/rules' => Http::sequence()
-                // First call (no existing rules)
-                ->push([
-                    'success' => true,
-                    'result' => [],
-                ])
-                // Second call (create rule)
-                ->push([
-                    'success' => true,
-                    'result' => [
-                        [
-                            'id' => 'rule-123',
-                            'filter' => ['id' => 'filter-123'],
-                            'description' => 'Test WAF Rule [id:test-rule]',
-                        ],
-                    ],
-                ]),
-            '*/filters' => Http::response([
+        Http::fake(function (Request $request) {
+            if ($request->method() === 'GET') {
+                return Http::response(['success' => false, 'errors' => [['message' => 'not found']]], 404);
+            }
+
+            return Http::response([
                 'success' => true,
                 'result' => [
-                    ['id' => 'filter-123', 'expression' => 'test expression'],
-                ],
-            ]),
-        ]);
-
-        $service = new WafRuleService($this->validConfig);
-        $result = $service->syncRule('test expression');
-
-        $this->assertInstanceOf(WafRuleResult::class, $result);
-        $this->assertEquals('create', $result->action);
-        $this->assertEquals('rule-123', $result->ruleId);
-        $this->assertEquals('filter-123', $result->filterId);
-        $this->assertEquals('test expression', $result->expression);
-        $this->assertStringContainsString('Successfully created', $result->message);
-
-        Http::assertSentCount(3);
-    }
-
-    #[Test]
-    public function it_updates_existing_waf_rule_successfully(): void
-    {
-        Http::fake([
-            '*/firewall/rules*' => Http::sequence()
-                // First call (existing rule found)
-                ->push([
-                    'success' => true,
-                    'result' => [
-                        [
-                            'id' => 'existing-rule-123',
-                            'filter' => ['id' => 'existing-filter-123'],
-                            'description' => 'Test WAF Rule [id:test-rule]',
-                        ],
-                    ],
-                ])
-                // Second call (fetch rule details)
-                ->push([
-                    'success' => true,
-                    'result' => [
-                        'id' => 'existing-rule-123',
-                        'filter' => [
-                            'id' => 'existing-filter-123',
-                            'description' => 'Existing filter description',
-                        ],
-                    ],
-                ]),
-            '*/filters/*' => Http::response([
-                'success' => true,
-                'result' => [
-                    'id' => 'existing-filter-123',
-                    'expression' => 'updated expression',
-                ],
-            ]),
-        ]);
-
-        $service = new WafRuleService($this->validConfig);
-        $result = $service->syncRule('updated expression');
-
-        $this->assertInstanceOf(WafRuleResult::class, $result);
-        $this->assertEquals('update', $result->action);
-        $this->assertEquals('existing-rule-123', $result->ruleId);
-        $this->assertEquals('existing-filter-123', $result->filterId);
-        $this->assertEquals('updated expression', $result->expression);
-        $this->assertStringContainsString('Successfully updated', $result->message);
-
-        Http::assertSentCount(3);
-    }
-
-    #[Test]
-    public function it_creates_rule_using_api_client(): void
-    {
-        $mockClient = Mockery::mock(WafApiClient::class);
-
-        $mockClient->shouldReceive('getFirewallRules')
-            ->once()
-            ->andReturn([]);
-
-        $mockClient->shouldReceive('createFilters')
-            ->once()
-            ->with([
-                [
-                    'expression' => 'test expression',
-                    'description' => 'Laravel static cache protection filter',
-                ],
-            ])
-            ->andReturn([
-                ['id' => 'filter-123', 'expression' => 'test expression'],
-            ]);
-
-        $mockClient->shouldReceive('createFirewallRules')
-            ->once()
-            ->with(Mockery::on(function ($rules) {
-                return is_array($rules)
-                    && count($rules) === 1
-                    && $rules[0]['filter']['id'] === 'filter-123'
-                    && $rules[0]['action'] === 'block';
-            }))
-            ->andReturn([
-                [
-                    'id' => 'rule-123',
-                    'filter' => ['id' => 'filter-123'],
+                    'id' => 'ruleset-1',
+                    'rules' => [['id' => 'rule-123', 'description' => 'Test WAF Rule [id:test-rule]']],
                 ],
             ]);
-
-        $service = new WafRuleService($this->validConfig, $mockClient);
-        $result = $service->syncRule('test expression');
-
-        $this->assertInstanceOf(WafRuleResult::class, $result);
-        $this->assertEquals('create', $result->action);
-        $this->assertEquals('rule-123', $result->ruleId);
-        $this->assertEquals('filter-123', $result->filterId);
-    }
-
-    #[Test]
-    public function it_updates_rule_using_api_client(): void
-    {
-        $mockClient = Mockery::mock(WafApiClient::class);
-
-        $mockClient->shouldReceive('getFirewallRules')
-            ->once()
-            ->andReturn([
-                [
-                    'id' => 'existing-rule-123',
-                    'description' => 'Test WAF Rule [id:test-rule]',
-                    'filter' => ['id' => 'existing-filter-123'],
-                ],
-            ]);
-
-        $mockClient->shouldReceive('getFirewallRule')
-            ->once()
-            ->with('existing-rule-123')
-            ->andReturn([
-                'id' => 'existing-rule-123',
-                'filter' => [
-                    'id' => 'existing-filter-123',
-                    'description' => 'Existing filter',
-                ],
-            ]);
-
-        $mockClient->shouldReceive('updateFilter')
-            ->once()
-            ->with('existing-filter-123', Mockery::on(function ($data) {
-                return $data['expression'] === 'updated expression'
-                    && $data['id'] === 'existing-filter-123';
-            }))
-            ->andReturn([
-                'id' => 'existing-filter-123',
-                'expression' => 'updated expression',
-            ]);
-
-        $service = new WafRuleService($this->validConfig, $mockClient);
-        $result = $service->syncRule('updated expression');
-
-        $this->assertInstanceOf(WafRuleResult::class, $result);
-        $this->assertEquals('update', $result->action);
-        $this->assertEquals('existing-rule-123', $result->ruleId);
-        $this->assertEquals('existing-filter-123', $result->filterId);
-    }
-
-    #[Test]
-    public function it_cleans_up_filter_when_rule_creation_fails(): void
-    {
-        $deleteRequests = [];
-
-        Http::fake(function (Request $request) use (&$deleteRequests) {
-            $url = $request->url();
-
-            // Track delete requests
-            if ($request->method() === 'DELETE') {
-                $deleteRequests[] = $url;
-
-                return Http::response([], 204);
-            }
-
-            // Handle GET for existing rules
-            if ($request->method() === 'GET' && str_contains($url, 'firewall/rules')) {
-                return Http::response(['success' => true, 'result' => []]);
-            }
-
-            // Handle POST for filter creation
-            if ($request->method() === 'POST' && str_contains($url, 'filters')) {
-                return Http::response([
-                    'success' => true,
-                    'result' => [['id' => 'filter-to-delete']],
-                ]);
-            }
-
-            // Handle POST for rule creation (fail)
-            if ($request->method() === 'POST' && str_contains($url, 'firewall/rules')) {
-                return Http::response([
-                    'success' => false,
-                    'errors' => [['message' => 'Rule creation failed']],
-                ], 400);
-            }
-
-            return Http::response([], 404);
         });
 
-        $service = new WafRuleService($this->validConfig);
+        $result = (new WafRuleService($this->validConfig))->syncRule('test expression');
 
-        try {
-            $service->syncRule('test expression');
-            $this->fail('Expected CloudflareApiException was not thrown');
-        } catch (CloudflareApiException $e) {
-            $this->assertStringContainsString('Rule creation failed', $e->getMessage());
-        }
+        $this->assertEquals('create', $result->action);
+        $this->assertEquals('rule-123', $result->ruleId);
+        $this->assertEquals('ruleset-1', $result->rulesetId);
 
-        $this->assertCount(1, $deleteRequests);
-        $this->assertStringContainsString('filters/filter-to-delete', $deleteRequests[0]);
+        Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
+            && $request['rules'][0]['expression'] === 'test expression'
+            && $request['rules'][0]['action'] === 'block'
+            && $request['rules'][0]['description'] === 'Test WAF Rule [id:test-rule]');
+    }
+
+    #[Test]
+    public function it_adds_rule_to_existing_ruleset(): void
+    {
+        $mockClient = Mockery::mock(WafApiClient::class);
+
+        $mockClient->shouldReceive('getEntrypointRuleset')
+            ->once()
+            ->andReturn(['id' => 'ruleset-1', 'rules' => [['id' => 'other', 'description' => 'Unrelated']]]);
+
+        $mockClient->shouldReceive('createRule')
+            ->once()
+            ->with('ruleset-1', Mockery::on(fn ($rule) => $rule['expression'] === 'test expression'
+                && $rule['action'] === 'block'
+                && $rule['enabled'] === true))
+            ->andReturn([
+                'id' => 'ruleset-1',
+                'rules' => [['id' => 'rule-123', 'description' => 'Test WAF Rule [id:test-rule]']],
+            ]);
+
+        $result = (new WafRuleService($this->validConfig, $mockClient))->syncRule('test expression');
+
+        $this->assertInstanceOf(WafRuleResult::class, $result);
+        $this->assertEquals('create', $result->action);
+        $this->assertEquals('rule-123', $result->ruleId);
+        $this->assertEquals('ruleset-1', $result->rulesetId);
+        $this->assertStringContainsString('Successfully created', $result->message);
+    }
+
+    #[Test]
+    public function it_updates_existing_rule_preserving_its_properties(): void
+    {
+        $mockClient = Mockery::mock(WafApiClient::class);
+
+        $mockClient->shouldReceive('getEntrypointRuleset')
+            ->once()
+            ->andReturn([
+                'id' => 'ruleset-1',
+                'rules' => [[
+                    'id' => 'existing-rule-123',
+                    'action' => 'managed_challenge',
+                    'description' => 'Test WAF Rule [id:test-rule]',
+                    'enabled' => false,
+                ]],
+            ]);
+
+        $mockClient->shouldReceive('updateRule')
+            ->once()
+            ->with('ruleset-1', 'existing-rule-123', [
+                'action' => 'managed_challenge',
+                'description' => 'Test WAF Rule [id:test-rule]',
+                'expression' => 'updated expression',
+                'enabled' => false,
+            ])
+            ->andReturn(['id' => 'ruleset-1']);
+
+        $result = (new WafRuleService($this->validConfig, $mockClient))->syncRule('updated expression');
+
+        $this->assertEquals('update', $result->action);
+        $this->assertEquals('existing-rule-123', $result->ruleId);
+        $this->assertEquals('ruleset-1', $result->rulesetId);
+        $this->assertEquals('updated expression', $result->expression);
+        $this->assertStringContainsString('Successfully updated', $result->message);
     }
 
     #[Test]
     public function it_contains_endpoint_and_method_information(): void
     {
         Http::fake([
-            '*/firewall/rules' => Http::response([
+            '*/rulesets/*' => Http::response([
                 'success' => false,
                 'errors' => [['message' => 'Test error', 'code' => 10000]],
             ], 400),
@@ -368,7 +227,7 @@ class WafRuleServiceTest extends TestCase
             $this->fail('Expected CloudflareApiException was not thrown');
         } catch (CloudflareApiException $e) {
             $this->assertEquals(400, $e->getStatusCode());
-            $this->assertStringContainsString('firewall/rules', $e->getEndpoint());
+            $this->assertStringContainsString('rulesets/phases', $e->getEndpoint());
             $this->assertEquals('GET', $e->getMethod());
             $this->assertIsArray($e->getErrorResponse());
         }

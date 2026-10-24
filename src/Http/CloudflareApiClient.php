@@ -174,6 +174,38 @@ class CloudflareApiClient
     }
 
     /**
+     * Perform a PATCH request to the Cloudflare API.
+     *
+     * @param  string  $endpoint  The API endpoint (relative to base URL)
+     * @param  array  $data  The data to send in the request body
+     * @return Response The HTTP response
+     *
+     * @throws CloudflareApiException If the request fails
+     */
+    public function patch(string $endpoint, array $data = []): Response
+    {
+        try {
+            $response = $this->getClient()->patch($endpoint, $data);
+        } catch (RequestException $e) {
+            if ($e->response) {
+                $this->handleApiError($e->response, 'PATCH request failed', $endpoint, 'PATCH');
+            }
+            throw CloudflareApiException::fromResponse(
+                $e->response,
+                'PATCH request failed',
+                $endpoint,
+                'PATCH'
+            );
+        }
+
+        if (! $response->successful()) {
+            $this->handleApiError($response, 'PATCH request failed', $endpoint, 'PATCH');
+        }
+
+        return $response;
+    }
+
+    /**
      * Perform a DELETE request to the Cloudflare API.
      *
      * @param  string  $endpoint  The API endpoint (relative to base URL)
