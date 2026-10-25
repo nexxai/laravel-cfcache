@@ -45,6 +45,16 @@ Once generated, you can copy and paste the expression into your domain's
 security rules by going to Security -> Security Rules -> Create Rule ->
 Custom Rule -> Edit expression
 
+Apps using `Route::domain()` get one expression per host by default. Create a
+custom rule for each expression, or request one OR-combined expression:
+
+```sh
+php artisan cloudflare:waf-rule --single-rule
+```
+
+Each expression has its own 4096-character limit. Oversized expressions fail
+without syncing. Both output modes support `--sync`.
+
 #### Cache Purging
 
 Purge all cached content or specific paths/routes:
@@ -146,6 +156,9 @@ return [
             'rule_description' => env('CFCACHE_RULE_DESCRIPTION', 'Valid Laravel Routes'),
             'rule_action' => env('CFCACHE_RULE_ACTION', 'block'),
             'hostnames' => env('CFCACHE_RULE_HOSTNAMES') ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES')))) : [],
+            'exclude_dotted_root_parameters' => true,
+            'allow_root_wildcard' => false,
+            'descend_public_directories' => true,
             'ignorable_paths' => ['/_dusk/*'],
             'forced_allowed_paths' => [],
         ],
@@ -206,7 +219,8 @@ leading slash if omitted.
 
 When using multiple hostnames or subdomains in the same zone, you can restrict
 the generated WAF rule so it only applies to specific hosts. If `hostnames` is
-empty (default), the rule applies to all hostnames.
+empty (default), the rule applies to all hostnames. This setting is used only
+when no routes have a domain; otherwise hosts are inferred from `Route::domain()`.
 
 Set hostnames in config or via `.env`:
 
@@ -219,6 +233,44 @@ Set hostnames in config or via `.env`:
 # .env — comma-separated
 CFCACHE_RULE_HOSTNAMES=app.example.com,www.example.com
 ```
+
+#### Domain Routes
+
+Each domain gets its own path allowlist. Routes without a domain, public assets,
+and `forced_allowed_paths` are included for every host. When unscoped routes
+exist, an additional rule protects other hosts using only those shared paths.
+
+Domain parameters become host wildcards. Literal hosts are excluded from matching
+parameterized hosts, so an admin host does not inherit the tenant allowlist:
+
+```text
+(http.host wildcard "*.example.com" and http.host ne "admin.example.com") and not (...tenant paths...)
+```
+
+`--sync` creates or updates each host rule using a stable identifier. It removes
+obsolete rules belonging to the configured `rule_identifier` after all new rules
+sync, including when switching to or from `--single-rule`. Unrelated rules are
+left alone. When copying expressions manually, remove old generated rules yourself.
+
+#### Path Safety
+
+- A root parameter such as `{account}` allows a single path segment, not an entire
+  subtree. Dotted segments are excluded by default to keep scanner filenames such
+  as `/.env` and `/wp-login.php` blocked. Set `exclude_dotted_root_parameters` to
+  `false` if account names need dots; this also allows those scanner filenames
+  through the root-parameter condition.
+- Internal wildcards are preserved: `{account}/stores` becomes `/*/stores`, and
+  `api/{version}/users` becomes `/api/*/users`. Cloudflare wildcards can span `/`,
+  so they may allow deeper paths than Laravel's parameters do.
+- Trailing optional parameters allow every omitted form: `activate/{token?}`
+  includes both `/activate` and `/activate/*`.
+- Public directories are scanned one level down: a real `public/vendor/livewire/`
+  directory allows `/vendor/livewire/*`, not all of `/vendor/*`. Files directly
+  inside each directory are included individually. Set `descend_public_directories`
+  to `false` to restore blanket directory wildcards.
+- Bare `/*` wildcards are disabled by default, including during condensation.
+  Enabling `allow_root_wildcard` permits catch-all wildcards and can effectively
+  disable path protection. Review generated expressions before applying them.
 
 ## Cache Purging
 
@@ -359,17 +411,16 @@ You can create a token with both WAF and Cache Purge permissions if you plan to 
 
 #### Multiple subdomains
 
-If you use multiple subdomains (e.g., `example.com` and `sub.example.com`) in the
-same zone, set the `hostnames` option in `config/cfcache.php` (see
-[Hostnames](#hostnames)) so the generated WAF rule only
-applies to the hostnames you specify. Otherwise the rule would apply to every
-hostname on the zone.
+Hosts declared with `Route::domain()` are handled automatically (see
+[Domain Routes](#domain-routes)). Without domain routes, set `hostnames` in
+`config/cfcache.php` to limit the generated rule to this app's hosts; otherwise
+the rule applies to every hostname on the zone.
 
 #### Certbot / .well-known
 
-If you're using [Certbot](https://certbot.org/) and the `.well-known` directory
-to manage your SSL certificates (or for other purposes), you will need to manually
-add a `.well-known/*` rule to the wildcard section of your WAF rule.
+Existing `public/.well-known/acme-challenge/` directories are detected automatically.
+If Certbot creates that directory only after rule generation, add
+`/.well-known/acme-challenge/*` to `forced_allowed_paths`.
 
 #### Cache Purging Notes
 

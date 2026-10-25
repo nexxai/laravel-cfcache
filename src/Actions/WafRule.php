@@ -7,6 +7,8 @@ use Illuminate\Support\Str;
 
 class WafRule
 {
+    public const ROOT_PARAMETER = '/[*]';
+
     protected Collection $routes;
 
     public function __construct()
@@ -22,7 +24,7 @@ class WafRule
      * - Removing entries that become redundant when a new wildcard is added
      *
      * @param  Collection<string>  $paths
-     * @return string Cloudflare expression for the optimized routes
+     * @return Collection<string>
      */
     public function optimize(Collection $paths): Collection
     {
@@ -66,6 +68,11 @@ class WafRule
      */
     protected function pathMatchesWildcard(string $concretePath, string $wildcardRule): bool
     {
+        // A root parameter is not a subtree and must never prune sibling paths.
+        if ($concretePath === self::ROOT_PARAMETER || $wildcardRule === self::ROOT_PARAMETER) {
+            return false;
+        }
+
         // Ensure leading slash
         $concretePath = Str::startsWith($concretePath, '/') ? $concretePath : '/'.$concretePath;
         $wildcardRule = Str::startsWith($wildcardRule, '/') ? $wildcardRule : '/'.$wildcardRule;
@@ -86,7 +93,7 @@ class WafRule
                     $regex .= '[^/]+';
                 }
             } else {
-                $regex .= preg_quote($seg, '/');
+                $regex .= preg_quote($seg, '~');
             }
 
             if (! $isLast) {
@@ -120,8 +127,8 @@ class WafRule
      * - Before: ["/shop", "/shop/cart", "/blog/*", "/blog/tags/*"]
      *   After:  ["/shop/*", "/blog/*"]
      *
-     * - Before: ["/", "/*", "/docs/*"] — if "/" exists, the root wildcard "/*" is pruned as redundant.
-     *   After:  ["/", "/docs/*"]
+     * Root parameters and paths beginning with an internal wildcard are preserved
+     * unless widening to a root wildcard has explicitly been enabled.
      *
      * @param  Collection<string>|array|null  $paths  Optional set of paths to condense; if null, uses internal routes.
      */
@@ -137,6 +144,10 @@ class WafRule
         } else {
             $working = $this->routes;
         }
+
+        $protected = $working->filter(fn (string $path) => $path === self::ROOT_PARAMETER
+            || (! config('cfcache.features.waf.allow_root_wildcard', false) && Str::startsWith($path, '/*')));
+        $working = $working->diff($protected);
 
         [$endingWildcards, $nonEnding] = $this->splitByEndingWildcard($working);
 
@@ -155,13 +166,12 @@ class WafRule
         // Condense ending-wildcard paths by their top-level segment
         $wildcardGrouped = $this->groupEndingWildcardsByTopLevel($endingWildcards);
         foreach ($wildcardGrouped as $prefix => $group) {
-            // If the base route '/' exists, prune the root wildcard '/*' as redundant
-            if ($prefix === '/' && ($nonEnding->contains('/') || $condensed->contains('/'))) {
-                continue;
-            }
-
             $condensed->push($this->condenseEndingWildcardGroup($prefix, $group));
         }
+
+        // A subtree wildcard does not cover its bare parent (e.g. /activate).
+        $condensed = $condensed->merge($nonEnding->reject(fn (string $path) => $this->containsWildcard($path)
+            || $this->isCoveredByExistingWildcards($condensed, $path)))->merge($protected);
 
         // Final pruning: if any broader wildcard exists (e.g., "/account/*"),
         // remove any remaining routes covered by it (e.g., "/account/subscription/*" or "/account/profile").
@@ -198,7 +208,11 @@ class WafRule
     protected function normalizeAndSort(Collection $paths): Collection
     {
         return $paths->map(function (string $path) {
-            return Str::startsWith($path, '/') ? $path : '/'.$path;
+            $path = Str::startsWith($path, '/') ? $path : '/'.$path;
+
+            return $path === '/*' && ! config('cfcache.features.waf.allow_root_wildcard', false)
+                ? self::ROOT_PARAMETER
+                : $path;
         })->sort()->values();
     }
 
@@ -263,7 +277,7 @@ class WafRule
      */
     protected function containsWildcard(string $path): bool
     {
-        return Str::contains($path, '*');
+        return $path !== self::ROOT_PARAMETER && Str::contains($path, '*');
     }
 
     /**
@@ -289,47 +303,28 @@ class WafRule
      */
     public function expression(?Collection $routes = null): string
     {
-        $routes = $routes ?? $this->routes;
-        $expression = 'not (';
-
-        // Anything containing a wildcard character should use the Cloudflare `wildcard` operator.
-        $wildcards = $routes->filter(function ($route) {
-            return $this->containsWildcard($route);
-        });
-
-        // Everything else (no wildcard characters) can be grouped in the `in {}` set.
-        $paths = $routes->filter(function ($route) {
-            return ! $this->containsWildcard($route);
-        });
+        $routes = $this->normalizeAndSort($routes ?? $this->routes);
+        $conditions = collect();
+        $wildcards = $routes->filter(fn (string $route) => $this->containsWildcard($route));
+        $paths = $routes->reject(fn (string $route) => $this->containsWildcard($route) || $route === self::ROOT_PARAMETER);
 
         if ($paths->isNotEmpty()) {
-            $expression .= 'http.request.uri.path in {"';
-            $expression .= implode('" "', $paths->toArray());
-            $expression .= '"}';
+            $conditions->push('http.request.uri.path in {'.$paths->map(fn (string $path) => json_encode($path, JSON_UNESCAPED_SLASHES))->join(' ').'}');
+        }
 
-            if ($wildcards->isNotEmpty()) {
-                $expression .= ' or ';
+        $conditions = $conditions->merge($wildcards->map(fn (string $route) => 'http.request.uri.path wildcard '.json_encode($route, JSON_UNESCAPED_SLASHES)));
+
+        if ($routes->contains(self::ROOT_PARAMETER)) {
+            $condition = 'not http.request.uri.path wildcard "/*/*"';
+
+            if (config('cfcache.features.waf.exclude_dotted_root_parameters', true)) {
+                $condition .= ' and not http.request.uri.path contains "."';
             }
+
+            $conditions->push('('.$condition.')');
         }
 
-        if ($wildcards->isNotEmpty()) {
-            $expression .= $wildcards->map(function ($route) {
-                // When condensing a path, anything after the first wildcard should be dropped.
-                // Ensure we only include up to the first '*' in the output expression.
-                if (Str::contains($route, '*')) {
-                    $route = Str::before($route, '*').'*';
-                }
-
-                return sprintf(
-                    'http.request.uri.path wildcard "%s"',
-                    $route
-                );
-            })->join(' or ');
-        }
-
-        $expression .= ')';
-
-        return $expression;
+        return $conditions->isEmpty() ? 'true' : 'not ('.$conditions->join(' or ').')';
     }
 
     /**
@@ -399,17 +394,7 @@ class WafRule
      */
     protected function prefixCoveredByEndingWildcard(Collection $endingWildcards, string $prefix): bool
     {
-        return $endingWildcards->contains(function ($wildcard) use ($prefix) {
-            $wildcardPrefix = Str::before($wildcard, '/*');
-
-            // Special case: root wildcard '/*' should not be considered covering the root '/' itself
-            if ($wildcardPrefix === '' && $prefix === '/') {
-                return false;
-            }
-
-            return ($wildcardPrefix !== '' && (Str::startsWith($prefix, $wildcardPrefix.'/') || $prefix === $wildcardPrefix))
-                || ($wildcardPrefix === '' && $prefix !== '/');
-        });
+        return $endingWildcards->contains(fn (string $wildcard) => $this->pathMatchesWildcard($prefix, $wildcard));
     }
 
     /**

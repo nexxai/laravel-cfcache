@@ -168,7 +168,8 @@ return [
             |
             | When non-empty, the generated WAF rule only applies when the request
             | hostname matches one of these values (compared against the Host header).
-            | When empty, the rule applies to all hostnames (current behavior).
+            | Used when routes have no domain. Route::domain() hosts are inferred
+            | automatically and each receives its own rule.
             | Set as an array here, or use CFCACHE_RULE_HOSTNAMES (comma-separated) in .env.
             |
             */
@@ -176,6 +177,15 @@ return [
             'hostnames' => env('CFCACHE_RULE_HOSTNAMES')
                 ? array_filter(array_map('trim', explode(',', env('CFCACHE_RULE_HOSTNAMES'))))
                 : [],
+
+            // Keep single-segment root parameters from allowing scanner filenames.
+            'exclude_dotted_root_parameters' => true,
+
+            // Dangerous: allow explicit /* paths and condensation to match every path.
+            'allow_root_wildcard' => false,
+
+            // Allow real files and subdirectories, rather than all of /<directory>/*.
+            'descend_public_directories' => true,
 
             /*
             |--------------------------------------------------------------------------

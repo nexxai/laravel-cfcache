@@ -1,0 +1,5 @@
+[
+    {"domain": null, "method": "GET|HEAD", "uri": "/", "name": "home", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "about", "name": "about", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "api/users", "name": "users", "action": "Closure", "middleware": []}
+]

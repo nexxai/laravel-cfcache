@@ -69,6 +69,7 @@ class WafRuleTest extends TestCase
             '/api/users',
             '/blog/*',
             '/images/*',
+            '/mailcoach/1234',
             '/mailcoach/1234/*',
             '/mailcoach/5678/*',
         ]);
@@ -141,7 +142,7 @@ class WafRuleTest extends TestCase
     }
 
     #[Test]
-    public function it_will_properly_slice_off_anything_after_the_first_wildcard_in_a_path(): void
+    public function it_preserves_every_wildcard_and_the_path_segments_after_them(): void
     {
         $paths = collect([
             '/test/*/*',
@@ -150,7 +151,7 @@ class WafRuleTest extends TestCase
         $rule = new WafRule;
         $optimized = $rule->condense($paths);
 
-        $expected = 'not (http.request.uri.path wildcard "/test/*")';
+        $expected = 'not (http.request.uri.path wildcard "/test/*/*")';
 
         $this->assertEquals($expected, $rule->expression());
     }

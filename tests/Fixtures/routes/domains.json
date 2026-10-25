@@ -1,0 +1,13 @@
+[
+    {"domain": null, "method": "GET|HEAD", "uri": "health", "name": "health", "action": "Closure", "middleware": []},
+    {"domain": "example.com", "method": "GET|HEAD", "uri": "/", "name": "home", "action": "Closure", "middleware": []},
+    {"domain": "example.com", "method": "GET|HEAD", "uri": "company/about", "name": "about", "action": "Closure", "middleware": []},
+    {"domain": "admin.example.com", "method": "GET|HEAD", "uri": "backoffice/audit", "name": "admin.audit", "action": "Closure", "middleware": []},
+    {"domain": "admin.example.com", "method": "GET|HEAD", "uri": "{account}", "name": "admin.account", "action": "Closure", "middleware": []},
+    {"domain": "admin.example.com", "method": "GET|HEAD", "uri": "{account}/stores", "name": "admin.stores", "action": "Closure", "middleware": []},
+    {"domain": "admin.example.com", "method": "GET|HEAD", "uri": "{account}/stores/{id}", "name": "admin.stores.show", "action": "Closure", "middleware": []},
+    {"domain": "admin.example.com", "method": "GET|HEAD", "uri": "activate/{token?}", "name": "admin.activate", "action": "Closure", "middleware": []},
+    {"domain": "{account}.example.com", "method": "GET|HEAD", "uri": "workspace/projects", "name": "tenant.projects", "action": "Closure", "middleware": []},
+    {"domain": "{account}.example.com", "method": "GET|HEAD", "uri": "api/{version}/users", "name": "tenant.users", "action": "Closure", "middleware": []},
+    {"domain": "{account}.example.com", "method": "GET|HEAD", "uri": "activate/{token?}", "name": "tenant.activate", "action": "Closure", "middleware": []}
+]
