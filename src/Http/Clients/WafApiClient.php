@@ -6,151 +6,88 @@ use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Http\CloudflareApiClient;
 
 /**
- * API client for WAF specific operations.
+ * API client for WAF specific operations, built on the Cloudflare Rulesets API.
+ *
+ * The legacy Firewall Rules and Filters APIs were removed by Cloudflare (error 10020).
  */
 class WafApiClient extends CloudflareApiClient
 {
+    public const PHASE = 'http_request_firewall_custom';
+
     /**
-     * Fetch all firewall rules for the configured zone.
+     * Fetch the zone's custom rules entrypoint ruleset.
      *
-     * @return array Array of firewall rule data
+     * @return array|null The ruleset (including its rules), or null if the zone has none yet
+     *
+     * @throws CloudflareApiException If the request fails for any reason other than a missing entrypoint
+     */
+    public function getEntrypointRuleset(): ?array
+    {
+        try {
+            $response = $this->get("zones/{$this->zoneId}/rulesets/phases/".self::PHASE.'/entrypoint');
+        } catch (CloudflareApiException $e) {
+            if ($e->getStatusCode() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return $response->json('result') ?: null;
+    }
+
+    /**
+     * Create the entrypoint ruleset with the given rules.
+     *
+     * @param  array  $rules  Rule definitions
+     * @return array The created ruleset
      *
      * @throws CloudflareApiException If the request fails
      */
-    public function getFirewallRules(): array
+    public function createEntrypointRuleset(array $rules): array
     {
-        $response = $this->get("zones/{$this->zoneId}/firewall/rules");
+        $response = $this->put("zones/{$this->zoneId}/rulesets/phases/".self::PHASE.'/entrypoint', [
+            'rules' => $rules,
+        ]);
 
         return $response->json('result', []);
     }
 
     /**
-     * Fetch a specific firewall rule by ID.
+     * Add a rule to an existing ruleset.
      *
-     * @param  string  $ruleId  The firewall rule ID
-     * @return array The firewall rule data
+     * @return array The updated ruleset, including all rules
      *
      * @throws CloudflareApiException If the request fails
      */
-    public function getFirewallRule(string $ruleId): array
+    public function createRule(string $rulesetId, array $rule): array
     {
-        $response = $this->get("zones/{$this->zoneId}/firewall/rules/{$ruleId}");
+        $response = $this->post("zones/{$this->zoneId}/rulesets/{$rulesetId}/rules", $rule);
 
         return $response->json('result', []);
     }
 
     /**
-     * Create one or more firewall rules.
+     * Update a rule in a ruleset.
      *
-     * @param  array  $rules  Array of rule definitions
-     * @return array The created firewall rules
+     * @return array The updated ruleset, including all rules
      *
      * @throws CloudflareApiException If the request fails
      */
-    public function createFirewallRules(array $rules): array
+    public function updateRule(string $rulesetId, string $ruleId, array $rule): array
     {
-        $response = $this->post("zones/{$this->zoneId}/firewall/rules", $rules);
+        $response = $this->patch("zones/{$this->zoneId}/rulesets/{$rulesetId}/rules/{$ruleId}", $rule);
 
         return $response->json('result', []);
     }
 
     /**
-     * Update a firewall rule.
-     *
-     * @param  string  $ruleId  The firewall rule ID to update
-     * @param  array  $ruleData  The updated rule data
-     * @return array The updated firewall rule
+     * Delete a rule from a ruleset.
      *
      * @throws CloudflareApiException If the request fails
      */
-    public function updateFirewallRule(string $ruleId, array $ruleData): array
+    public function deleteRule(string $rulesetId, string $ruleId): void
     {
-        $response = $this->put("zones/{$this->zoneId}/firewall/rules/{$ruleId}", $ruleData);
-
-        return $response->json('result', []);
-    }
-
-    /**
-     * Delete a firewall rule.
-     *
-     * @param  string  $ruleId  The firewall rule ID to delete
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function deleteFirewallRule(string $ruleId): void
-    {
-        $this->delete("zones/{$this->zoneId}/firewall/rules/{$ruleId}");
-    }
-
-    /**
-     * Create one or more filters.
-     *
-     * @param  array  $filters  Array of filter definitions
-     * @return array The created filters
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function createFilters(array $filters): array
-    {
-        $response = $this->post("zones/{$this->zoneId}/filters", $filters);
-
-        return $response->json('result', []);
-    }
-
-    /**
-     * Get all filters for the configured zone.
-     *
-     * @return array Array of filter data
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function getFilters(): array
-    {
-        $response = $this->get("zones/{$this->zoneId}/filters");
-
-        return $response->json('result', []);
-    }
-
-    /**
-     * Get a specific filter by ID.
-     *
-     * @param  string  $filterId  The filter ID
-     * @return array The filter data
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function getFilter(string $filterId): array
-    {
-        $response = $this->get("zones/{$this->zoneId}/filters/{$filterId}");
-
-        return $response->json('result', []);
-    }
-
-    /**
-     * Update a filter.
-     *
-     * @param  string  $filterId  The filter ID to update
-     * @param  array  $filterData  The updated filter data
-     * @return array The updated filter
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function updateFilter(string $filterId, array $filterData): array
-    {
-        $response = $this->put("zones/{$this->zoneId}/filters/{$filterId}", $filterData);
-
-        return $response->json('result', []);
-    }
-
-    /**
-     * Delete a filter.
-     *
-     * @param  string  $filterId  The filter ID to delete
-     *
-     * @throws CloudflareApiException If the request fails
-     */
-    public function deleteFilter(string $filterId): void
-    {
-        $this->delete("zones/{$this->zoneId}/filters/{$filterId}");
+        $this->delete("zones/{$this->zoneId}/rulesets/{$rulesetId}/rules/{$ruleId}");
     }
 }

@@ -7,7 +7,7 @@ readonly class WafRuleResult
     public function __construct(
         public string $action,
         public string $ruleId,
-        public string $filterId,
+        public string $rulesetId,
         public string $expression,
         public string $message
     ) {}
@@ -17,7 +17,7 @@ readonly class WafRuleResult
         return new self(
             action: $data['action'] ?? '',
             ruleId: $data['rule_id'] ?? '',
-            filterId: $data['filter_id'] ?? '',
+            rulesetId: $data['ruleset_id'] ?? '',
             expression: $data['expression'] ?? '',
             message: $data['message'] ?? ''
         );
@@ -28,7 +28,7 @@ readonly class WafRuleResult
         return [
             'action' => $this->action,
             'rule_id' => $this->ruleId,
-            'filter_id' => $this->filterId,
+            'ruleset_id' => $this->rulesetId,
             'expression' => $this->expression,
             'message' => $this->message,
         ];

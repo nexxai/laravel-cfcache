@@ -42,150 +42,111 @@ class WafRuleService extends CloudflareService
      */
     public function syncRule(string $expression): WafRuleResult
     {
-        $existingRule = $this->findExistingRule();
+        $ruleset = $this->apiClient->getEntrypointRuleset();
 
-        if ($existingRule) {
-            return $this->updateRule($existingRule['id'], $expression);
+        if ($ruleset === null) {
+            return $this->createRuleset($expression);
         }
 
-        return $this->createRule($expression);
+        $existingRule = $this->findExistingRule($ruleset);
+
+        if ($existingRule) {
+            return $this->updateRule($ruleset['id'], $existingRule, $expression);
+        }
+
+        return $this->createRule($ruleset['id'], $expression);
     }
 
     /**
-     * Find an existing WAF rule by its identifier.
+     * Find an existing WAF rule in the ruleset by its identifier.
      *
      * @return array|null The existing rule data if found, null otherwise
-     *
-     * @throws CloudflareApiException If the API request fails
      */
-    protected function findExistingRule(): ?array
+    protected function findExistingRule(array $ruleset): ?array
     {
         $identifier = $this->getRuleIdentifier();
-        $rules = collect($this->apiClient->getFirewallRules());
 
-        return $rules->first(function ($rule) use ($identifier) {
-            $description = $rule['description'] ?? '';
-
-            return str_contains($description, "[id:{$identifier}]");
+        return collect($ruleset['rules'] ?? [])->first(function ($rule) use ($identifier) {
+            return str_contains($rule['description'] ?? '', "[id:{$identifier}]");
         });
     }
 
     /**
-     * Create a new WAF rule in Cloudflare.
-     *
-     * This method creates both a filter (containing the expression) and a firewall rule (containing the action and
-     * filter reference). If rule creation fails, it will clean up the created filter to avoid orphaned resources.
-     *
-     * @param  string  $expression  The Cloudflare expression for the filter
-     * @return WafRuleResult Result object containing the created rule details
+     * Build the rule payload for a new rule.
+     */
+    protected function buildRule(string $expression): array
+    {
+        return [
+            'action' => $this->getRuleAction(),
+            'description' => $this->generateRuleDescription($this->getRuleIdentifier()),
+            'expression' => $expression,
+            'enabled' => true,
+        ];
+    }
+
+    /**
+     * Create the zone's custom rules ruleset containing the new rule.
      *
      * @throws CloudflareApiException If the API request fails
      */
-    protected function createRule(string $expression): WafRuleResult
+    protected function createRuleset(string $expression): WafRuleResult
     {
-        $filter = $this->createFilter($expression);
-        $identifier = $this->getRuleIdentifier();
-        $description = $this->generateRuleDescription($identifier);
+        $ruleset = $this->apiClient->createEntrypointRuleset([$this->buildRule($expression)]);
 
-        $ruleData = [
-            [
-                'action' => $this->getRuleAction(),
-                'description' => $description,
-                'filter' => [
-                    'id' => $filter['id'],
-                ],
-                'paused' => false,
-            ],
-        ];
+        return $this->createdResult($ruleset, $expression);
+    }
 
-        try {
-            $rules = $this->apiClient->createFirewallRules($ruleData);
-            $rule = $rules[0] ?? [];
-        } catch (CloudflareApiException $e) {
-            if (isset($filter['id'])) {
-                $this->deleteFilter($filter['id']);
-            }
-            throw $e;
-        }
+    /**
+     * Add a new rule to an existing ruleset.
+     *
+     * @throws CloudflareApiException If the API request fails
+     */
+    protected function createRule(string $rulesetId, string $expression): WafRuleResult
+    {
+        $ruleset = $this->apiClient->createRule($rulesetId, $this->buildRule($expression));
+
+        return $this->createdResult($ruleset, $expression);
+    }
+
+    /**
+     * Build the result for a created rule; the API returns the full ruleset, so locate our rule in it.
+     */
+    protected function createdResult(array $ruleset, string $expression): WafRuleResult
+    {
+        $rule = $this->findExistingRule($ruleset) ?? [];
 
         return new WafRuleResult(
             action: 'create',
-            ruleId: $rule['id'],
-            filterId: $filter['id'],
+            ruleId: $rule['id'] ?? '',
+            rulesetId: $ruleset['id'] ?? '',
             expression: $expression,
             message: 'Successfully created new WAF rule'
         );
     }
 
     /**
-     * Update an existing WAF rule in Cloudflare.
+     * Update the expression of an existing WAF rule, preserving its other properties.
      *
-     * This method fetches the existing rule to get its filter ID, then updates the filter with the new expression. The
-     * rule itself maintains its other properties like action and description.
-     *
-     * @param  string  $ruleId  The ID of the existing rule to update
-     * @param  string  $expression  The new Cloudflare expression for the filter
-     * @return WafRuleResult Result object containing the updated rule details
+     * @param  array  $rule  The existing rule as returned by the API
      *
      * @throws CloudflareApiException If the API request fails
      */
-    protected function updateRule(string $ruleId, string $expression): WafRuleResult
+    protected function updateRule(string $rulesetId, array $rule, string $expression): WafRuleResult
     {
-        $rule = $this->apiClient->getFirewallRule($ruleId);
-        $filterId = data_get($rule, 'filter.id');
-
-        $filterData = [
-            'id' => $filterId,
+        $this->apiClient->updateRule($rulesetId, $rule['id'], [
+            'action' => $rule['action'] ?? $this->getRuleAction(),
+            'description' => $rule['description'],
             'expression' => $expression,
-            'description' => data_get($rule, 'filter.description'),
-        ];
-
-        $this->apiClient->updateFilter($filterId, $filterData);
+            'enabled' => $rule['enabled'] ?? true,
+        ]);
 
         return new WafRuleResult(
             action: 'update',
-            ruleId: $ruleId,
-            filterId: $filterId,
+            ruleId: $rule['id'],
+            rulesetId: $rulesetId,
             expression: $expression,
             message: 'Successfully updated existing WAF rule'
         );
-    }
-
-    /**
-     * Create a new filter in Cloudflare.
-     *
-     * Filters contain the expression logic that determines when a firewall rule should be triggered. This method
-     * creates the filter which will then be referenced by a firewall rule.
-     *
-     * @param  string  $expression  The Cloudflare expression for the filter
-     * @return array The created filter data from the API response
-     *
-     * @throws CloudflareApiException If the API request fails
-     */
-    protected function createFilter(string $expression): array
-    {
-        $filterData = [
-            'expression' => $expression,
-            'description' => 'Laravel static cache protection filter',
-        ];
-
-        $filters = $this->apiClient->createFilters([$filterData]);
-
-        return $filters[0] ?? [];
-    }
-
-    /**
-     * Delete a Cloudflare filter by its ID.
-     *
-     * @param  string  $filterId  The ID of the filter to delete
-     */
-    protected function deleteFilter(string $filterId): void
-    {
-        try {
-            $this->apiClient->deleteFilter($filterId);
-        } catch (CloudflareApiException) {
-            // Silently ignore deletion errors to avoid cascading failures.
-        }
     }
 
     /**

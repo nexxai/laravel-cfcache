@@ -96,7 +96,7 @@ CFCACHE_ZONE_ID=your-zone-id-here
     - Use the "Custom token" template
     - Name the token "CFCache package token"
     - Based on the features you need, grant the following permissions:
-        - **WAF rules**: Zone -> Firewall Services -> Edit
+        - **WAF rules**: Zone -> WAF -> Edit
         - **Cache purging**: Zone -> Cache Purge -> Purge
     - Include your specific zone(s) in the Zone Resources
     - Create the token and copy it to your `.env` file as `CFCACHE_API_TOKEN`

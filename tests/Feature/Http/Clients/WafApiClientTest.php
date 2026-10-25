@@ -25,149 +25,76 @@ class WafApiClientTest extends TestCase
     }
 
     #[Test]
-    public function it_returns_parsed_firewall_rules(): void
+    public function it_gets_the_entrypoint_ruleset(): void
     {
-        $expectedRules = [
-            ['id' => 'rule-1', 'description' => 'Rule 1'],
-            ['id' => 'rule-2', 'description' => 'Rule 2'],
-        ];
+        $ruleset = ['id' => 'rs-1', 'rules' => [['id' => 'r-1']]];
 
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedRules], 200),
-        ]);
+        Http::fake(['*' => Http::response(['success' => true, 'result' => $ruleset], 200)]);
 
-        $rules = $this->client->getFirewallRules();
+        $this->assertEquals($ruleset, $this->client->getEntrypointRuleset());
 
-        $this->assertEquals($expectedRules, $rules);
+        Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+            && $request->url() === 'https://api.cloudflare.com/client/v4/zones/test-zone-id/rulesets/phases/http_request_firewall_custom/entrypoint');
     }
 
     #[Test]
-    public function it_returns_single_firewall_rule(): void
+    public function it_returns_null_when_no_entrypoint_exists(): void
     {
-        $expectedRule = ['id' => 'rule-123', 'description' => 'Test Rule'];
+        Http::fake(['*' => Http::response([
+            'success' => false,
+            'errors' => [['message' => 'could not find entrypoint ruleset', 'code' => 10003]],
+        ], 404)]);
 
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedRule], 200),
-        ]);
-
-        $rule = $this->client->getFirewallRule('rule-123');
-
-        $this->assertEquals($expectedRule, $rule);
-
-        Http::assertSent(function (Request $request) {
-            return str_contains($request->url(), 'firewall/rules/rule-123');
-        });
+        $this->assertNull($this->client->getEntrypointRuleset());
     }
 
     #[Test]
-    public function it_creates_firewall_rules(): void
+    public function it_creates_the_entrypoint_ruleset(): void
     {
-        $rulesToCreate = [
-            ['action' => 'block', 'description' => 'Rule 1'],
-        ];
-        $expectedResult = [
-            ['id' => 'new-rule-1', 'action' => 'block', 'description' => 'Rule 1'],
-        ];
+        $rules = [['action' => 'block', 'expression' => 'true']];
 
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedResult], 200),
-        ]);
+        Http::fake(['*' => Http::response(['success' => true, 'result' => ['id' => 'rs-1']], 200)]);
 
-        $result = $this->client->createFirewallRules($rulesToCreate);
+        $this->assertEquals(['id' => 'rs-1'], $this->client->createEntrypointRuleset($rules));
 
-        $this->assertEquals($expectedResult, $result);
+        Http::assertSent(fn (Request $request) => $request->method() === 'PUT'
+            && str_ends_with($request->url(), 'rulesets/phases/http_request_firewall_custom/entrypoint')
+            && $request['rules'] === $rules);
     }
 
     #[Test]
-    public function it_creates_filters(): void
+    public function it_creates_a_rule(): void
     {
-        $filtersToCreate = [
-            ['expression' => 'test expression', 'description' => 'Test filter'],
-        ];
-        $expectedResult = [
-            ['id' => 'filter-1', 'expression' => 'test expression', 'description' => 'Test filter'],
-        ];
+        Http::fake(['*' => Http::response(['success' => true, 'result' => ['id' => 'rs-1']], 200)]);
 
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedResult], 200),
-        ]);
+        $this->client->createRule('rs-1', ['action' => 'block']);
 
-        $result = $this->client->createFilters($filtersToCreate);
-
-        $this->assertEquals($expectedResult, $result);
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), 'zones/test-zone-id/rulesets/rs-1/rules')
+            && $request['action'] === 'block');
     }
 
     #[Test]
-    public function it_updates_filter(): void
+    public function it_updates_a_rule(): void
     {
-        $filterData = [
-            'id' => 'filter-123',
-            'expression' => 'updated expression',
-            'description' => 'Updated filter',
-        ];
+        Http::fake(['*' => Http::response(['success' => true, 'result' => ['id' => 'rs-1']], 200)]);
 
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $filterData], 200),
-        ]);
+        $this->client->updateRule('rs-1', 'r-1', ['expression' => 'new']);
 
-        $result = $this->client->updateFilter('filter-123', $filterData);
-
-        $this->assertEquals($filterData, $result);
-
-        Http::assertSent(function (Request $request) {
-            return str_contains($request->url(), 'filters/filter-123')
-                && $request->method() === 'PUT';
-        });
+        Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
+            && str_ends_with($request->url(), 'rulesets/rs-1/rules/r-1')
+            && $request['expression'] === 'new');
     }
 
     #[Test]
-    public function it_deletes_filter(): void
+    public function it_deletes_a_rule(): void
     {
-        Http::fake([
-            '*' => Http::response(['success' => true], 204),
-        ]);
+        Http::fake(['*' => Http::response(['success' => true, 'result' => ['id' => 'rs-1']], 200)]);
 
-        $this->client->deleteFilter('filter-123');
+        $this->client->deleteRule('rs-1', 'r-1');
 
-        Http::assertSent(function (Request $request) {
-            return str_contains($request->url(), 'filters/filter-123')
-                && $request->method() === 'DELETE';
-        });
-    }
-
-    #[Test]
-    public function it_gets_all_filters(): void
-    {
-        $expectedFilters = [
-            ['id' => 'filter-1', 'expression' => 'expr1'],
-            ['id' => 'filter-2', 'expression' => 'expr2'],
-        ];
-
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedFilters], 200),
-        ]);
-
-        $filters = $this->client->getFilters();
-
-        $this->assertEquals($expectedFilters, $filters);
-    }
-
-    #[Test]
-    public function it_gets_single_filter(): void
-    {
-        $expectedFilter = ['id' => 'filter-123', 'expression' => 'test expr'];
-
-        Http::fake([
-            '*' => Http::response(['success' => true, 'result' => $expectedFilter], 200),
-        ]);
-
-        $filter = $this->client->getFilter('filter-123');
-
-        $this->assertEquals($expectedFilter, $filter);
-
-        Http::assertSent(function (Request $request) {
-            return str_contains($request->url(), 'filters/filter-123');
-        });
+        Http::assertSent(fn (Request $request) => $request->method() === 'DELETE'
+            && str_ends_with($request->url(), 'rulesets/rs-1/rules/r-1'));
     }
 
     #[Test]
@@ -180,14 +107,12 @@ class WafApiClientTest extends TestCase
             ], 401),
         ]);
 
-        $this->expectException(CloudflareApiException::class);
-
         try {
-            $this->client->getFirewallRules();
+            $this->client->getEntrypointRuleset();
+            $this->fail('Expected CloudflareApiException was not thrown');
         } catch (CloudflareApiException $e) {
             $this->assertTrue($e->isAuthenticationError());
             $this->assertEquals(401, $e->getStatusCode());
-            throw $e;
         }
     }
 
@@ -201,14 +126,12 @@ class WafApiClientTest extends TestCase
             ], 429),
         ]);
 
-        $this->expectException(CloudflareApiException::class);
-
         try {
-            $this->client->getFirewallRules();
+            $this->client->getEntrypointRuleset();
+            $this->fail('Expected CloudflareApiException was not thrown');
         } catch (CloudflareApiException $e) {
             $this->assertTrue($e->isRateLimitError());
             $this->assertEquals(429, $e->getStatusCode());
-            throw $e;
         }
     }
 }
