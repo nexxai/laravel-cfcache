@@ -4,6 +4,7 @@ namespace Tests\Feature\Services\Cloudflare;
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use JTSmith\Cloudflare\Commands\GenerateWafRule;
 use JTSmith\Cloudflare\DTOs\WafRuleResult;
 use JTSmith\Cloudflare\Exceptions\CloudflareApiException;
 use JTSmith\Cloudflare\Http\Clients\WafApiClient;
@@ -208,6 +209,86 @@ class WafRuleServiceTest extends TestCase
         $this->assertEquals('ruleset-1', $result->rulesetId);
         $this->assertEquals('updated expression', $result->expression);
         $this->assertStringContainsString('Successfully updated', $result->message);
+    }
+
+    #[Test]
+    public function it_syncs_domain_rules_idempotently_and_removes_obsolete_managed_rules_when_switching_modes(): void
+    {
+        $ruleset = [
+            'id' => 'ruleset-1',
+            'rules' => [
+                ['id' => 'legacy', 'description' => 'Test WAF Rule [id:test-rule]'],
+                ['id' => 'unrelated', 'description' => 'Other rule [id:test-rule-other]', 'expression' => 'untouched'],
+            ],
+        ];
+        $nextId = 1;
+
+        Http::fake(function (Request $request) use (&$ruleset, &$nextId) {
+            $id = basename(parse_url($request->url(), PHP_URL_PATH));
+
+            if ($request->method() === 'POST') {
+                $ruleset['rules'][] = ['id' => 'created-'.$nextId++] + $request->data();
+            }
+
+            if ($request->method() === 'PATCH') {
+                $ruleset['rules'] = array_map(fn (array $rule) => $rule['id'] === $id ? array_replace($rule, $request->data()) : $rule, $ruleset['rules']);
+            }
+
+            if ($request->method() === 'DELETE') {
+                $ruleset['rules'] = array_values(array_filter($ruleset['rules'], fn (array $rule) => $rule['id'] !== $id));
+            }
+
+            return Http::response(['success' => true, 'result' => $ruleset]);
+        });
+
+        $json = file_get_contents(__DIR__.'/../../../Fixtures/routes/domains.json');
+        $command = new GenerateWafRule;
+        $expressions = $command->rules($json)->all();
+        $service = new WafRuleService($this->validConfig);
+        $created = $service->syncRules($expressions);
+
+        $this->assertCount(count($expressions), $created);
+        $this->assertCount(count($expressions) + 1, $ruleset['rules']);
+        $this->assertNotContains('legacy', array_column($ruleset['rules'], 'id'));
+
+        foreach ($created as $result) {
+            $this->assertSame('create', $result->action);
+            $this->assertNotEmpty($result->ruleId);
+        }
+
+        $updated = $service->syncRules(array_reverse($expressions, true));
+        $this->assertSame(array_reverse(array_column($created, 'ruleId')), array_column($updated, 'ruleId'));
+        $this->assertSame(['update'], array_unique(array_column($updated, 'action')));
+
+        $combined = $command->rules($json, singleRule: true)->all();
+        $service->syncRules($combined);
+        $this->assertCount(2, $ruleset['rules']);
+        $this->assertSame('untouched', $ruleset['rules'][0]['expression']);
+        $this->assertSame('Test WAF Rule [id:test-rule]', $ruleset['rules'][1]['description']);
+        $this->assertSame($combined[''], $ruleset['rules'][1]['expression']);
+
+        // Returning to per-host mode must remove the old combined blocker too.
+        $service->syncRules($expressions);
+        $this->assertCount(count($expressions) + 1, $ruleset['rules']);
+        $this->assertNotContains('Test WAF Rule [id:test-rule]', array_column($ruleset['rules'], 'description'));
+        $this->assertSame('untouched', $ruleset['rules'][0]['expression']);
+    }
+
+    #[Test]
+    public function it_does_not_delete_old_rules_if_a_domain_rule_fails_to_sync(): void
+    {
+        $ruleset = ['id' => 'ruleset-1', 'rules' => [['id' => 'legacy', 'description' => 'Test [id:test-rule]']]];
+        Http::fake(fn (Request $request) => $request->method() === 'GET'
+            ? Http::response(['success' => true, 'result' => $ruleset])
+            : Http::response(['success' => false, 'errors' => [['message' => 'Rule limit reached']]], 400));
+        $expressions = (new GenerateWafRule)->rules(file_get_contents(__DIR__.'/../../../Fixtures/routes/domains.json'))->all();
+
+        try {
+            (new WafRuleService($this->validConfig))->syncRules($expressions);
+            $this->fail('Expected a sync failure');
+        } catch (CloudflareApiException) {
+            Http::assertNotSent(fn (Request $request) => $request->method() === 'DELETE');
+        }
     }
 
     #[Test]

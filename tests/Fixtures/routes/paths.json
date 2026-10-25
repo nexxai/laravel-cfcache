@@ -1,0 +1,10 @@
+[
+    {"domain": null, "method": "GET|HEAD", "uri": "/", "name": "home", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "{account}", "name": "account", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "{account}/stores", "name": "stores", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "{account}/stores/{id}", "name": "stores.show", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "{account}/orders/{id}", "name": "orders.show", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "api/{version}/users", "name": "users", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "activate/{token?}", "name": "activate", "action": "Closure", "middleware": []},
+    {"domain": null, "method": "GET|HEAD", "uri": "archive/{year?}/{month?}", "name": "archive", "action": "Closure", "middleware": []}
+]

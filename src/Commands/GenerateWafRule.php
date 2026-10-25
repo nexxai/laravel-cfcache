@@ -18,7 +18,8 @@ class GenerateWafRule extends BaseCommand
     protected $description = 'Generate a Cloudflare security rule for the endpoints available in your application';
 
     protected $signature = 'cloudflare:waf-rule
-                            {--sync : Sync the generated rule to Cloudflare via API}';
+                            {--sync : Sync the generated rules to Cloudflare via API}
+                            {--single-rule : Combine domain rules into one expression}';
 
     public function handle(): void
     {
@@ -33,21 +34,78 @@ class GenerateWafRule extends BaseCommand
         Artisan::call('route:list', ['--json' => true]);
         $json = Artisan::output();
 
-        $routes = $this->routes($json, $this->folioRoutes());
-        $rule = $this->generateRule($routes);
+        $rules = $this->rules($json, $this->folioRoutes(), $this->option('single-rule'));
 
-        $hostnames = config('cfcache.features.waf.hostnames', []);
-        if (is_array($hostnames) && $hostnames !== []) {
-            $list = implode(' ', array_map(fn (string $h) => '"'.str_replace('"', '\\"', $h).'"', $hostnames));
-            $rule = '(http.host in {'.$list.'}) and ('.$rule.')';
+        foreach ($rules as $domain => $rule) {
+            $this->info($domain === '' ? 'Generated Cloudflare WAF rule:' : "Generated Cloudflare WAF rule for {$domain}:");
+            $this->line($rule);
         }
 
-        $this->info('Generated Cloudflare WAF rule:');
-        $this->line($rule);
+        if ($rules->contains(fn (string $rule) => Str::length($rule) > 4096)) {
+            $this->fail('Unable to generate an expression under the 4096 character limit. Use separate rules or review the allowed paths.');
+        }
 
         if ($this->option('sync')) {
-            $this->syncToCloudflare($rule);
+            $this->syncToCloudflare($rules);
         }
+    }
+
+    /** @return Collection<string, string> */
+    public function rules(string $json, Collection|array $additionalRoutes = [], bool $singleRule = false): Collection
+    {
+        $groups = collect(json_decode($json, true) ?: [])->groupBy(fn (array $route) => strtolower($route['domain'] ?? ''));
+        $domains = $groups->keys()->reject(fn (string $domain) => $domain === '');
+
+        if ($domains->isEmpty()) {
+            $hostnames = config('cfcache.features.waf.hostnames', []);
+            $prefix = '';
+            $suffix = '';
+
+            if (is_array($hostnames) && $hostnames !== []) {
+                $list = implode(' ', array_map(fn (string $host) => json_encode($host, JSON_UNESCAPED_SLASHES), $hostnames));
+                $prefix = '(http.host in {'.$list.'}) and (';
+                $suffix = ')';
+            }
+
+            $rule = $this->generateRule($this->routes($json, $additionalRoutes), maxLength: 4096 - Str::length($prefix.$suffix));
+
+            return collect(['' => $prefix.$rule.$suffix]);
+        }
+
+        $hosts = $domains->mapWithKeys(fn (string $domain) => [$domain => preg_replace('/\{[^}]+\}/', '*', $domain)]);
+        $literalHosts = $hosts->reject(fn (string $host) => str_contains($host, '*'));
+        $commonRoutes = $groups->get('', collect());
+        $rules = collect();
+
+        foreach ($hosts as $domain => $host) {
+            $condition = $this->hostCondition($host);
+
+            if (str_contains($host, '*')) {
+                foreach ($literalHosts as $literalHost) {
+                    if (Str::is($host, $literalHost)) {
+                        $condition .= ' and http.host ne '.json_encode($literalHost);
+                    }
+                }
+            }
+
+            $routes = $this->routes($groups->get($domain)->merge($commonRoutes)->toJson(), $additionalRoutes);
+            $rules->put($domain, $this->generateRule($routes, $condition));
+        }
+
+        // Unscoped routes also apply to hosts not covered by an explicit domain.
+        if ($commonRoutes->isNotEmpty()) {
+            $condition = 'not ('.$hosts->map(fn (string $host) => $this->hostCondition($host))->join(' or ').')';
+            $rules->put('*', $this->generateRule($this->routes($commonRoutes->toJson(), $additionalRoutes), $condition));
+        }
+
+        return $singleRule
+            ? collect(['' => $rules->map(fn (string $rule) => '('.$rule.')')->join(' or ')])
+            : $rules;
+    }
+
+    protected function hostCondition(string $host): string
+    {
+        return 'http.host '.(str_contains($host, '*') ? 'wildcard' : 'eq').' '.json_encode($host);
     }
 
     public function routes(string $json, Collection|array $additionalRoutes = []): Collection
@@ -59,25 +117,33 @@ class GenerateWafRule extends BaseCommand
             ->merge($this->publicPaths())
             ->merge($this->forcedAllowedPaths())
             ->unique()
-            ->map(function ($route) {
-                if (! str_contains($route, '{')) {
-                    return $route;
-                }
-
-                return preg_replace('/\{[^}]+\}/', '*', $route);
-            })
-            ->map(function ($route) {
-                return Str::startsWith($route, '/') ? $route : '/'.$route;
-            })
-            ->reject(function ($route) {
-                return $route === '*';
-            })
+            ->flatMap(fn (string $route) => $this->routePaths($route))
             ->reject(function ($route) {
                 return $this->isIgnorablePath($route);
             })
-            ->values();
+            ->unique()->values();
 
         return $routes;
+    }
+
+    protected function routePaths(string $route): array
+    {
+        $paths = [];
+
+        do {
+            $path = trim($route, '/');
+            $paths[] = preg_match('/^\{[^}]+\}$/', $path)
+                ? WafRule::ROOT_PARAMETER
+                : '/'.preg_replace('/\{[^}]+\}/', '*', $path);
+
+            if (! preg_match('~(?:^|/)\{[^/{}]+\?\}$~', $route)) {
+                break;
+            }
+
+            $route = preg_replace('~(?:^|/)\{[^/{}]+\?\}$~', '', $route);
+        } while (true);
+
+        return $paths;
     }
 
     protected function folioRoutes(): Collection
@@ -105,40 +171,47 @@ class GenerateWafRule extends BaseCommand
 
     public function publicPaths(): array
     {
-        $glob = File::glob(base_path('public/{,.}*'), GLOB_BRACE);
+        $glob = File::glob(public_path('{,.}*'), GLOB_BRACE);
 
         return collect($glob)
-            ->map(fn ($path) => Str::replace('\\', '/', $path))
-            ->map(fn ($path) => Str::after($path, '/public/'))
-            ->reject(fn ($path) => in_array($path, ['.', '..', '.htaccess', 'index.php']))
-            ->map(fn ($path) => File::isDirectory(public_path($path)) ? $path.'/*' : $path)
+            ->flatMap(function (string $path) {
+                if (File::isDirectory($path) && ! in_array(basename($path), ['.', '..']) && config('cfcache.features.waf.descend_public_directories', true)) {
+                    return File::glob($path.'/{,.}*', GLOB_BRACE);
+                }
+
+                return [$path];
+            })
+            ->reject(fn (string $path) => in_array(basename($path), ['.', '..', '.htaccess', 'index.php']))
+            ->map(fn (string $path) => substr(Str::replace('\\', '/', $path), strlen(Str::replace('\\', '/', public_path())) + 1).(File::isDirectory($path) ? '/*' : ''))
+            ->values()
             ->all();
     }
 
-    public function generateRule($routes): string
+    public function generateRule($routes, string $hostCondition = '', int $maxLength = 4096): string
     {
         $waf_rule = new WafRule;
-        $waf_rule->optimize($routes);
+        $optimized = $waf_rule->optimize($routes);
+        $prefix = $hostCondition === '' ? '' : '('.$hostCondition.') and ';
 
-        if (Str::length($waf_rule->expression()) <= 4000) {
-            return $waf_rule->expression();
+        if (Str::length($prefix.$waf_rule->expression()) <= $maxLength) {
+            return $prefix.$waf_rule->expression();
         }
+
+        // Condensing public assets must not reintroduce blanket directory wildcards.
+        $publicPaths = collect($this->publicPaths())->flatMap(fn (string $path) => $this->routePaths($path))->intersect($optimized);
 
         do {
             $previous = $waf_rule->expression();
-            $waf_rule->condense();
+            $condensed = $waf_rule->condense($optimized->diff($publicPaths));
+            $optimized = $waf_rule->optimize($condensed->merge($publicPaths));
 
-            if (Str::length($waf_rule->expression()) <= 4000) {
-                return $waf_rule->expression();
+            if (Str::length($prefix.$waf_rule->expression()) <= $maxLength) {
+                return $prefix.$waf_rule->expression();
             }
 
         } while ($waf_rule->expression() !== $previous);
 
-        if (Str::length($waf_rule->expression()) > 4000) {
-            $this->error('Unable to generate a single expression under the 4096 characters limit. You will need to review and condense the expression yourself.');
-        }
-
-        return $waf_rule->expression();
+        return $prefix.$waf_rule->expression();
     }
 
     public function forcedAllowedPaths(): array
@@ -164,7 +237,7 @@ class GenerateWafRule extends BaseCommand
         });
     }
 
-    protected function syncToCloudflare(string $expression): void
+    protected function syncToCloudflare(Collection $rules): void
     {
         $this->newLine();
         $this->info('Syncing WAF rule to Cloudflare...');
@@ -172,13 +245,13 @@ class GenerateWafRule extends BaseCommand
 
         try {
             $service = app(WafRuleService::class);
-            $result = $service->syncRule($expression);
-
-            $this->info($result->message);
-            $this->line("  Action: {$result->action} WAF rule");
-            $this->line("  Rule ID: {$result->ruleId}");
-            $this->line("  Ruleset ID: {$result->rulesetId}");
-            $this->line('  Expression length: '.Str::length($expression).' characters');
+            foreach ($service->syncRules($rules->all()) as $result) {
+                $this->info($result->message);
+                $this->line("  Action: {$result->action} WAF rule");
+                $this->line("  Rule ID: {$result->ruleId}");
+                $this->line("  Ruleset ID: {$result->rulesetId}");
+                $this->line('  Expression length: '.Str::length($result->expression).' characters');
+            }
             $this->newLine();
             $this->info('Sync completed successfully!');
         } catch (CloudflareApiException $e) {
