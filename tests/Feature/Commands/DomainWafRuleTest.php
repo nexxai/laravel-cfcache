@@ -228,7 +228,12 @@ class DomainWafRuleTest extends TestCase
         $this->assertStringContainsString(') or (', $expected);
         $output = new BufferedOutput;
         $this->assertSame(0, $this->app->make(Kernel::class)->call('cloudflare:waf-rule', ['--single-rule' => true], $output));
-        $this->assertStringContainsString("Generated Cloudflare WAF rule:\n".$expected, $output->fetch());
+        $text = $output->fetch();
+
+        foreach (["\n", "\r\n"] as $lineEnding) {
+            $platformOutput = str_replace(PHP_EOL, $lineEnding, $text);
+            $this->assertSame(['Generated Cloudflare WAF rule:', $expected], preg_split('/\r?\n/', trim($platformOutput)));
+        }
     }
 
     #[Test]
