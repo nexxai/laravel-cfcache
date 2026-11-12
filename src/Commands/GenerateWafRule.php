@@ -118,6 +118,7 @@ class GenerateWafRule extends BaseCommand
             ->merge($this->forcedAllowedPaths())
             ->unique()
             ->flatMap(fn (string $route) => $this->routePaths($route))
+            ->flatMap(fn (string $route) => $this->livewireAssetPaths($route))
             ->reject(function ($route) {
                 return $this->isIgnorablePath($route);
             })
@@ -144,6 +145,32 @@ class GenerateWafRule extends BaseCommand
         } while (true);
 
         return $paths;
+    }
+
+    protected function livewireAssetPaths(string $route): array
+    {
+        $assets = [
+            'livewire.js',
+            'livewire.min.js',
+            'livewire.min.js.map',
+            'livewire.csp.js',
+            'livewire.csp.min.js',
+            'livewire.csp.min.js.map',
+        ];
+
+        if (! in_array(basename($route), $assets, true)) {
+            return [$route];
+        }
+
+        $prefix = Str::beforeLast($route, '/');
+        $asset = config('livewire.csp_safe', false) ? 'livewire.csp' : 'livewire';
+        $script = config('app.debug', false) ? "{$asset}.js" : "{$asset}.min.js";
+
+        return [
+            $route,
+            "{$prefix}/{$script}",
+            "{$prefix}/{$asset}.min.js.map",
+        ];
     }
 
     protected function folioRoutes(): Collection

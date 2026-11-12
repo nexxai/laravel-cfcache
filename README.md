@@ -409,6 +409,33 @@ You can create a token with both WAF and Cache Purge permissions if you plan to 
 
 ## Notes
 
+#### Livewire Assets
+
+When a discovered path uses one of Livewire's standard JavaScript or source-map
+filenames, the generator adds only the script and source map selected by your
+application configuration, in the same directory:
+
+| `livewire.csp_safe` | `app.debug` | Added filenames |
+| --- | --- | --- |
+| `false` (default) | `false` | `livewire.min.js`, `livewire.min.js.map` |
+| `false` (default) | `true` | `livewire.js`, `livewire.min.js.map` |
+| `true` | `false` | `livewire.csp.min.js`, `livewire.csp.min.js.map` |
+| `true` | `true` | `livewire.csp.js`, `livewire.csp.min.js.map` |
+
+Explicitly discovered paths are preserved, even when they belong to another
+build. Livewire can serve the CSP build through a normal-looking script URL,
+so removing registered routes based on their filenames could block valid
+requests. Duplicate paths are removed.
+
+This supports `/livewire/`, Livewire's hashed prefixes, and custom directories
+using exact filenames rather than a directory-wide wildcard. Configured
+`ignorable_paths` still apply to these paths. This only updates the WAF
+allowlist; it does not publish assets or register missing Laravel routes.
+
+Generate the rule using the deployed application's configuration, and regenerate
+it after updating the package or changing these settings. Use
+`php artisan cloudflare:waf-rule --sync` to update it through the Cloudflare API.
+
 #### Multiple subdomains
 
 Hosts declared with `Route::domain()` are handled automatically (see
