@@ -4,7 +4,9 @@ namespace Tests\Feature\Commands;
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Route;
 use JTSmith\Cloudflare\Commands\GenerateWafRule;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
@@ -119,6 +121,143 @@ class GenerateWafRuleTest extends TestCase
         $this->assertContains('/', $routes);
         $this->assertContains('/cdn-cgi/zaraz/s.js', $routes);
         $this->assertContains('/cdn-cgi/monitor/xhr', $routes);
+    }
+
+    #[Test]
+    #[DataProvider('livewireConfigurations')]
+    public function it_only_adds_assets_for_the_configured_livewire_build(bool $cspSafe, bool $debug, string $scriptRoute, array $expectedPaths): void
+    {
+        Config::set('livewire.csp_safe', $cspSafe);
+        Config::set('app.debug', $debug);
+
+        Route::get($scriptRoute, fn () => '');
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+        $expression = $output->fetch();
+
+        preg_match_all('~"(/livewire/[^"]*)"~', $expression, $matches);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame($expectedPaths, $matches[1]);
+    }
+
+    public static function livewireConfigurations(): array
+    {
+        return [
+            'normal production' => [false, false, 'livewire/livewire.min.js', [
+                '/livewire/livewire.min.js',
+                '/livewire/livewire.min.js.map',
+            ]],
+            'normal debug' => [false, true, 'livewire/livewire.js', [
+                '/livewire/livewire.js',
+                '/livewire/livewire.min.js.map',
+            ]],
+            'csp production' => [true, false, 'livewire/livewire.min.js', [
+                '/livewire/livewire.csp.min.js',
+                '/livewire/livewire.csp.min.js.map',
+                '/livewire/livewire.min.js',
+            ]],
+            'csp debug' => [true, true, 'livewire/livewire.js', [
+                '/livewire/livewire.csp.js',
+                '/livewire/livewire.csp.min.js.map',
+                '/livewire/livewire.js',
+            ]],
+        ];
+    }
+
+    #[Test]
+    public function it_defaults_to_normal_assets_without_removing_registered_csp_routes(): void
+    {
+        Config::set('livewire', []);
+        Config::set('app.debug', false);
+
+        Route::get('livewire/livewire.csp.min.js', fn () => '');
+        Route::get('livewire/livewire.csp.min.js.map', fn () => '');
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+        $expression = $output->fetch();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('"/livewire/livewire.min.js.map"', $expression);
+        $this->assertStringNotContainsString('"/livewire/livewire.js"', $expression);
+        $this->assertStringContainsString('"/livewire/livewire.min.js"', $expression);
+        $this->assertStringNotContainsString('"/livewire/livewire.csp.js"', $expression);
+        $this->assertStringContainsString('"/livewire/livewire.csp.min.js"', $expression);
+        $this->assertStringContainsString('"/livewire/livewire.csp.min.js.map"', $expression);
+        $this->assertSame(1, substr_count($expression, '"/livewire/livewire.csp.min.js.map"'));
+        $this->assertStringNotContainsString('wildcard "/livewire/*"', $expression);
+    }
+
+    #[Test]
+    #[DataProvider('livewireAssetRoutes')]
+    public function it_keeps_the_discovered_prefix_for_configured_livewire_assets(string $route, string $prefix): void
+    {
+        Config::set('livewire.csp_safe', false);
+        Config::set('app.debug', false);
+
+        Route::get($route, fn () => '');
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+        $expression = $output->fetch();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('"/'.$route.'"', $expression);
+        $this->assertStringContainsString('"'.$prefix.'/livewire.min.js"', $expression);
+        $this->assertStringContainsString('"'.$prefix.'/livewire.min.js.map"', $expression);
+        $this->assertStringNotContainsString('wildcard "'.$prefix.'/*"', $expression);
+    }
+
+    public static function livewireAssetRoutes(): array
+    {
+        return [
+            'standard prefix' => ['livewire/livewire.js', '/livewire'],
+            'hashed prefix' => ['livewire-1a2b3c4d/livewire.min.js', '/livewire-1a2b3c4d'],
+            'custom prefix' => ['tenant/assets/livewire.csp.js', '/tenant/assets'],
+            'nested prefix' => ['custom/livewire/livewire.csp.min.js', '/custom/livewire'],
+            'root source map' => ['livewire.min.js.map', ''],
+            'csp source map' => ['livewire-1234abcd/livewire.csp.min.js.map', '/livewire-1234abcd'],
+        ];
+    }
+
+    #[Test]
+    public function it_applies_ignorable_paths_to_discovered_livewire_assets(): void
+    {
+        Config::set('livewire.csp_safe', true);
+        Config::set('app.debug', false);
+        Config::set('cfcache.features.waf.ignorable_paths', ['/livewire-1a2b3c4d/*.map']);
+
+        Route::get('livewire-1a2b3c4d/livewire.js', fn () => '');
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+        $expression = $output->fetch();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('"/livewire-1a2b3c4d/livewire.js"', $expression);
+        $this->assertStringContainsString('"/livewire-1a2b3c4d/livewire.csp.min.js"', $expression);
+        $this->assertStringNotContainsString('.js.map', $expression);
+    }
+
+    #[Test]
+    public function it_does_not_add_livewire_assets_without_a_matching_asset_route(): void
+    {
+        Route::post('livewire/update', fn () => '');
+        Route::get('assets/not-livewire.js', fn () => '');
+        Route::get('livewire/livewire.esm.js', fn () => '');
+
+        $output = new BufferedOutput;
+        $exitCode = $this->app->make(Kernel::class)->call('cloudflare:waf-rule', [], $output);
+        $expression = $output->fetch();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('"/livewire/update"', $expression);
+        $this->assertStringContainsString('"/assets/not-livewire.js"', $expression);
+        $this->assertStringContainsString('"/livewire/livewire.esm.js"', $expression);
+        $this->assertStringNotContainsString('livewire.csp.', $expression);
+        $this->assertStringNotContainsString('livewire.min.js.map', $expression);
     }
 
     #[Test]
